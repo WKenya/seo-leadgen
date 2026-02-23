@@ -6,6 +6,8 @@ from uuid import UUID
 from sqlalchemy import delete
 
 from app.audit.crawler import CrawlConfig, crawl_site
+from app.audit.lighthouse_client import run_lighthouse
+from app.audit.screenshots import capture_homepage_screenshot
 from app.audit.tls_check import check_tls
 from app.db import SessionLocal
 from app.models import Audit, Issue, Lead
@@ -30,25 +32,44 @@ def audit_lead(lead_id: str) -> dict[str, object]:
         session.flush()
 
         tls_result = check_tls(lead.website_url)
+        audit_target_url = tls_result.get("final_url") or lead.website_url
         crawl_result = crawl_site(
-            tls_result.get("final_url") or lead.website_url,
+            audit_target_url,
             CrawlConfig(
                 max_pages=settings.crawl_max_pages,
                 delay_seconds=settings.crawl_delay_seconds,
                 respect_robots=True,
             ),
         )
+        lighthouse_result = None
+        lighthouse_error = None
+        try:
+            lighthouse_result = run_lighthouse(settings.audit_lighthouse_url, audit_target_url)
+        except Exception as exc:  # noqa: BLE001
+            lighthouse_error = str(exc)
+
+        screenshot_result = None
+        try:
+            screenshot_result = capture_homepage_screenshot(audit_target_url)
+        except Exception as exc:  # noqa: BLE001
+            screenshot_result = {"status": "error", "error": str(exc), "artifact_path": None}
 
         audit.final_url = tls_result.get("final_url")
         audit.https_ok = tls_result.get("https_ok")
         audit.redirect_chain = tls_result.get("redirect_chain")
         audit.cert_error = tls_result.get("cert_error")
+        audit.lighthouse_summary = (
+            {"result": lighthouse_result, "error": lighthouse_error}
+            if (lighthouse_result is not None or lighthouse_error)
+            else None
+        )
         audit.crawl_summary = {
             "visited_pages": crawl_result.get("visited_pages"),
             "checked_links": crawl_result.get("checked_links"),
             "broken_links_count": crawl_result.get("broken_links_count"),
         }
         audit.contact_signals = crawl_result.get("contact_signals")
+        audit.artifact_index = {"screenshot": screenshot_result} if screenshot_result is not None else None
         audit.finished_at = datetime.now(timezone.utc)
 
         session.execute(delete(Issue).where(Issue.audit_id == audit.id))
@@ -89,6 +110,16 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                     details=broken,
                 )
             )
+        if lighthouse_error:
+            session.add(
+                Issue(
+                    audit_id=audit.id,
+                    kind="perf",
+                    severity=2,
+                    title="Lighthouse snapshot failed",
+                    details={"error": lighthouse_error, "url": audit_target_url},
+                )
+            )
 
         lead.status = "Audited"
         session.commit()
@@ -104,4 +135,5 @@ def audit_lead(lead_id: str) -> dict[str, object]:
         "cert_error": tls_result.get("cert_error"),
         "broken_links_count": crawl_result.get("broken_links_count"),
         "visited_pages": crawl_result.get("visited_pages"),
+        "lighthouse_error": lighthouse_error,
     }
