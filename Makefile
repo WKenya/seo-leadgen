@@ -4,7 +4,7 @@ COMPOSE ?= docker compose
 UV ?= uv
 NPM ?= npm
 
-.PHONY: help env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate revision api-dev worker-dev scheduler-dev audit-dev check test
+.PHONY: help env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev check test
 
 help:
 	@printf "%s\n" \
@@ -15,11 +15,12 @@ help:
 	"make standup       - env + up + migrate (one-command bring-up)" \
 	"make down          - stop docker stack" \
 	"make logs          - tail all container logs" \
-	"make migrate       - run alembic migrations with uv" \
+	"make migrate       - run alembic migrations in worker container" \
+	"make migrate-local - run alembic migrations locally via uv" \
 	"make api-dev       - run api locally (uv)" \
 	"make worker-dev    - run worker locally (uv)" \
 	"make scheduler-dev - run celery beat locally (uv)" \
-	"make audit-dev     - run audit service locally (npm)"
+	"make audit-dev     - run audit service locally (npm)" \
 	"make test          - run unit tests (stdlib unittest)"
 
 env:
@@ -68,6 +69,9 @@ logs-db:
 	$(COMPOSE) logs -f db redis
 
 migrate: env
+	$(COMPOSE) exec -T worker uv run alembic -c ../../alembic.ini upgrade head
+
+migrate-local: env
 	cd services/worker && $(UV) run alembic -c ../../alembic.ini upgrade head
 
 revision:
