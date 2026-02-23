@@ -1,12 +1,95 @@
+from __future__ import annotations
+
+from urllib.parse import urlparse
+
+from sqlalchemy import select
+
+from app.db import SessionLocal
+from app.discovery.google_places import GooglePlacesClient
+from app.models import Lead
+from app.settings import get_settings
 from app.worker import celery_app
+
+
+def _domain(url: str) -> str:
+    return urlparse(url).netloc.lower()
+
+
+def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | None:
+    lead = session.execute(select(Lead).where(Lead.place_id == place_id)).scalar_one_or_none()
+    if lead is not None:
+        return lead
+
+    # Fallback dedupe by domain until we add a persisted normalized-domain column.
+    target_domain = _domain(website_url)
+    for candidate in session.execute(select(Lead).where(Lead.website_url.is_not(None))).scalars():
+        if _domain(candidate.website_url) == target_domain:
+            return candidate
+    return None
 
 
 @celery_app.task(name="discover_leads")
 def discover_leads(city: str, category: str, radius_meters: int = 15000) -> dict[str, object]:
+    settings = get_settings()
+    if not settings.google_places_api_key:
+        raise RuntimeError("GOOGLE_PLACES_API_KEY is not configured")
+
+    client = GooglePlacesClient(settings.google_places_api_key)
+    discovered = client.discover_leads(city=city, category=category, limit=20)
+
+    created = 0
+    updated = 0
+    skipped = 0
+    with SessionLocal() as session:
+        for item in discovered:
+            lead = _find_existing_lead(
+                session,
+                place_id=item.place_id,
+                website_url=item.website_url,
+            )
+            if lead is None:
+                lead = Lead(
+                    name=item.name,
+                    category=category,
+                    source="google_places",
+                    place_id=item.place_id,
+                    website_url=item.website_url,
+                    address=item.address,
+                    phone=item.phone,
+                    status="Discovered",
+                )
+                session.add(lead)
+                created += 1
+                continue
+
+            changed = False
+            for attr, value in {
+                "name": item.name,
+                "category": category,
+                "source": "google_places",
+                "place_id": item.place_id,
+                "website_url": item.website_url,
+                "address": item.address,
+                "phone": item.phone,
+            }.items():
+                if value and getattr(lead, attr) != value:
+                    setattr(lead, attr, value)
+                    changed = True
+            if changed:
+                updated += 1
+            else:
+                skipped += 1
+
+        session.commit()
+
     return {
-        "status": "stub",
+        "status": "ok",
         "city": city,
         "category": category,
-        "radius_meters": radius_meters,
+        "radius_meters_requested": radius_meters,
+        "discovered_count": len(discovered),
+        "created": created,
+        "updated": updated,
+        "unchanged": skipped,
+        "note": "text search implementation; radius currently informational",
     }
-

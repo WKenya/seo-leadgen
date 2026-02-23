@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
+    google_places_api_key: str = Field(default="", alias="GOOGLE_PLACES_API_KEY")
     crawl_max_pages: int = Field(default=10, alias="CRAWL_MAX_PAGES")
     crawl_delay_seconds: float = Field(default=1.0, alias="CRAWL_DELAY_SECONDS")
     audit_lighthouse_url: str = Field(default="http://audit:8081/run", alias="AUDIT_LIGHTHOUSE_URL")
@@ -22,4 +23,3 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-
