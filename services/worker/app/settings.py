@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
     google_places_api_key: str = Field(default="", alias="GOOGLE_PLACES_API_KEY")
+    notion_token: str = Field(default="", alias="NOTION_TOKEN")
+    notion_database_id: str = Field(default="", alias="NOTION_DATABASE_ID")
     sender_name: str = Field(default="Website Fixer", alias="SENDER_NAME")
     sender_email: str = Field(default="noreply@example.com", alias="SENDER_EMAIL")
     physical_address: str = Field(default="PO Box 123, Cleveland, OH 44101", alias="PHYSICAL_ADDRESS")

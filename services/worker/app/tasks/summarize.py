@@ -139,11 +139,14 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
         lead.status = "Draft Ready"
         session.commit()
         session.refresh(draft)
+        draft_id = str(draft.id)
+
+    celery_app.send_task("sync_notion", kwargs={"lead_id": lead_id, "audit_id": audit_id, "draft_id": draft_id})
 
     return {
         "status": "ok",
         "lead_id": lead_id,
         "audit_id": audit_id,
-        "draft_id": str(draft.id),
+        "draft_id": draft_id,
         "claims_used_count": len(draft_output.claims_used),
     }

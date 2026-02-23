@@ -10,6 +10,7 @@ dependencies = [
   "sqlalchemy>=2.0.38",
   "psycopg[binary]>=3.2.9",
   "httpx>=0.28.1",
+  "notion-client>=2.4.0",
 ]
 
 [tool.uv]

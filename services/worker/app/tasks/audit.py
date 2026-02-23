@@ -92,10 +92,14 @@ def audit_lead(lead_id: str) -> dict[str, object]:
 
         lead.status = "Audited"
         session.commit()
+        audit_id_value = str(audit.id)
+
+    celery_app.send_task("summarize_and_draft", kwargs={"lead_id": lead_id, "audit_id": audit_id_value})
 
     return {
         "status": "ok",
         "lead_id": lead_id,
+        "audit_id": audit_id_value,
         "https_ok": tls_result.get("https_ok"),
         "cert_error": tls_result.get("cert_error"),
         "broken_links_count": crawl_result.get("broken_links_count"),
