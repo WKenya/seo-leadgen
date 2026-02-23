@@ -1,6 +1,15 @@
 .DEFAULT_GOAL := help
 
+ifeq ($(shell command -v docker >/dev/null 2>&1 && echo yes),yes)
 COMPOSE ?= docker compose
+else ifeq ($(shell command -v podman >/dev/null 2>&1 && echo yes),yes)
+COMPOSE ?= podman compose
+else ifeq ($(shell command -v docker-compose >/dev/null 2>&1 && echo yes),yes)
+COMPOSE ?= docker-compose
+else
+COMPOSE ?= docker compose
+endif
+
 UV ?= uv
 NPM ?= npm
 
@@ -69,7 +78,7 @@ logs-db:
 	$(COMPOSE) logs -f db redis
 
 migrate: env
-	$(COMPOSE) exec -T worker uv run alembic -c ../../alembic.ini upgrade head
+	$(COMPOSE) exec -T worker uv run alembic -c /app/alembic.ini upgrade head
 
 migrate-local: env
 	cd services/worker && $(UV) run alembic -c ../../alembic.ini upgrade head

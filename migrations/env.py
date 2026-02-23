@@ -7,10 +7,17 @@ import sys
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
-# Make `services/worker` importable when running from repo root.
-WORKER_DIR = Path(__file__).resolve().parents[1] / "services" / "worker"
-if str(WORKER_DIR) not in sys.path:
-    sys.path.insert(0, str(WORKER_DIR))
+# Support both repo-root execution and container execution (`/app` layout).
+ROOT_DIR = Path(__file__).resolve().parents[1]
+WORKER_DIR_CANDIDATES = (
+    ROOT_DIR / "services" / "worker",
+    ROOT_DIR,
+)
+for worker_dir in WORKER_DIR_CANDIDATES:
+    if (worker_dir / "app").exists():
+        if str(worker_dir) not in sys.path:
+            sys.path.insert(0, str(worker_dir))
+        break
 
 from app.models import Base  # noqa: E402
 from app.settings import get_settings  # noqa: E402
@@ -58,4 +65,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-
