@@ -4,7 +4,7 @@ COMPOSE ?= docker compose
 UV ?= uv
 NPM ?= npm
 
-.PHONY: help env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate revision api-dev worker-dev scheduler-dev audit-dev check
+.PHONY: help env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate revision api-dev worker-dev scheduler-dev audit-dev check test
 
 help:
 	@printf "%s\n" \
@@ -20,6 +20,7 @@ help:
 	"make worker-dev    - run worker locally (uv)" \
 	"make scheduler-dev - run celery beat locally (uv)" \
 	"make audit-dev     - run audit service locally (npm)"
+	"make test          - run unit tests (stdlib unittest)"
 
 env:
 	@test -f .env || cp .env.example .env
@@ -88,3 +89,5 @@ audit-dev:
 check:
 	python3 -m compileall services/api/app services/worker/app migrations
 
+test:
+	python3 -m unittest discover -s services/worker/tests -p 'test_*.py' -v
