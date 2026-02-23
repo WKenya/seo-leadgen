@@ -1,0 +1,16 @@
+[project]
+name = "seo-lead-worker"
+version = "0.1.0"
+description = "Celery worker for SEO lead generation MVP"
+requires-python = ">=3.12"
+dependencies = [
+  "celery[redis]>=5.4.0",
+  "pydantic-settings>=2.10.0",
+  "sqlalchemy>=2.0.38",
+  "psycopg[binary]>=3.2.9",
+  "httpx>=0.28.1",
+]
+
+[tool.uv]
+package = false
+

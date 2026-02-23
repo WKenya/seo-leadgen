@@ -1,0 +1,52 @@
+services:
+  api:
+    build: ./services/api
+    env_file: .env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - artifacts:/data/artifacts
+
+  worker:
+    build: ./services/worker
+    env_file: .env
+    depends_on:
+      - db
+      - redis
+      - audit
+    volumes:
+      - artifacts:/data/artifacts
+
+  scheduler:
+    build: ./services/worker
+    env_file: .env
+    command: ["uv", "run", "celery", "-A", "app.worker.celery_app", "beat", "-l", "INFO"]
+    depends_on:
+      - db
+      - redis
+
+  audit:
+    build: ./services/audit
+    env_file: .env
+    ports:
+      - "8081:8081"
+
+  redis:
+    image: redis:7-alpine
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: seo_lead
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
+  artifacts:
+
