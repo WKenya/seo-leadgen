@@ -40,6 +40,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000) -> dict
     created = 0
     updated = 0
     skipped = 0
+    notion_sync_lead_ids: list[str] = []
     with SessionLocal() as session:
         for item in discovered:
             lead = _find_existing_lead(
@@ -59,7 +60,9 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000) -> dict
                     status="Discovered",
                 )
                 session.add(lead)
+                session.flush()
                 created += 1
+                notion_sync_lead_ids.append(str(lead.id))
                 continue
 
             changed = False
@@ -77,10 +80,14 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000) -> dict
                     changed = True
             if changed:
                 updated += 1
+                notion_sync_lead_ids.append(str(lead.id))
             else:
                 skipped += 1
 
         session.commit()
+
+    for lead_id in notion_sync_lead_ids:
+        celery_app.send_task("sync_notion", kwargs={"lead_id": lead_id})
 
     return {
         "status": "ok",
@@ -91,5 +98,6 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000) -> dict
         "created": created,
         "updated": updated,
         "unchanged": skipped,
+        "queued_notion_sync": len(notion_sync_lead_ids),
         "note": "text search implementation; radius currently informational",
     }
