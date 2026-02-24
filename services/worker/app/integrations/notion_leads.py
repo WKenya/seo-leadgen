@@ -1,14 +1,32 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from app.models import Audit, EmailDraft, Lead
+if TYPE_CHECKING:
+    from app.models import Audit, EmailDraft, Lead
 
 
 def _rich_text(value: str | None) -> list[dict[str, Any]]:
     if not value:
         return []
     return [{"type": "text", "text": {"content": value[:2000]}}]
+
+
+REQUIRED_NOTION_PROPERTIES = {
+    "Name",
+    "Status",
+    "Category",
+    "Source",
+    "Website",
+    "Email",
+    "Phone",
+    "Address",
+    "Findings",
+    "Proof",
+    "Email Draft",
+    "Gmail Draft Link",
+    "Opt-out",
+}
 
 
 def lead_page_properties(
@@ -58,6 +76,11 @@ class NotionLeadSyncClient:
         self.database_id = database_id
         self.client = Client(auth=token)
 
+    def get_database_property_names(self) -> set[str]:
+        database = self.client.databases.retrieve(database_id=self.database_id)
+        properties = database.get("properties") or {}
+        return set(properties.keys())
+
     def upsert_lead_page(
         self,
         *,
@@ -66,6 +89,11 @@ class NotionLeadSyncClient:
         draft: EmailDraft | None = None,
     ) -> str:
         properties = lead_page_properties(lead=lead, audit=audit, draft=draft)
+        available = self.get_database_property_names()
+        missing = REQUIRED_NOTION_PROPERTIES - available
+        if missing:
+            raise RuntimeError(f"notion_missing_properties: {sorted(missing)}")
+        properties = {key: value for key, value in properties.items() if key in available}
         if lead.notion_page_id:
             self.client.pages.update(page_id=lead.notion_page_id, properties=properties)
             return lead.notion_page_id
@@ -73,4 +101,3 @@ class NotionLeadSyncClient:
         page = self.client.pages.create(parent={"database_id": self.database_id}, properties=properties)
         page_id = page["id"]
         return page_id
-

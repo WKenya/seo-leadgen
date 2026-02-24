@@ -41,11 +41,16 @@ def sync_notion(lead_id: str, audit_id: str | None = None, draft_id: str | None 
         payload_preview = lead_page_properties(lead=lead, audit=audit, draft=draft)
         notion_status = "skipped"
         page_id = lead.notion_page_id
+        sync_error = None
         if settings.notion_token and settings.notion_database_id:
-            client = NotionLeadSyncClient(settings.notion_token, settings.notion_database_id)
-            page_id = client.upsert_lead_page(lead=lead, audit=audit, draft=draft)
-            lead.notion_page_id = page_id
-            notion_status = "synced"
+            try:
+                client = NotionLeadSyncClient(settings.notion_token, settings.notion_database_id)
+                page_id = client.upsert_lead_page(lead=lead, audit=audit, draft=draft)
+                lead.notion_page_id = page_id
+                notion_status = "synced"
+            except Exception as exc:  # noqa: BLE001
+                notion_status = "error"
+                sync_error = str(exc)
 
         session.add(
             OutreachEvent(
@@ -57,6 +62,7 @@ def sync_notion(lead_id: str, audit_id: str | None = None, draft_id: str | None 
                     "draft_id": draft_id,
                     "page_id": page_id,
                     "property_keys": sorted(payload_preview.keys()),
+                    "error": sync_error,
                 },
             )
         )
@@ -68,4 +74,5 @@ def sync_notion(lead_id: str, audit_id: str | None = None, draft_id: str | None 
         "audit_id": audit_id,
         "draft_id": draft_id,
         "notion_page_id": page_id,
+        "error": sync_error,
     }
