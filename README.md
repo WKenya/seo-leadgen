@@ -70,7 +70,7 @@ Webhooks:
 - `POST /webhooks/outreach-events` (`X-Webhook-Signature` HMAC-SHA256 + `X-Webhook-Timestamp` via `WEBHOOK_SIGNATURE_SECRET`, or fallback `X-Webhook-Token` / `WEBHOOK_SHARED_SECRET`)
   - supports optional per-event `event_id` for idempotent ingestion
   - HMAC payload format: `{unix_timestamp}.{raw_request_body}` (SHA-256 hex; `sha256=` prefix accepted)
-  - accepts normalized payload (`{"events":[...]}`), SendGrid Event Webhook arrays, and Postmark webhook payloads (bounce/spam complaint/subscription change)
+  - accepts normalized payload (`{"events":[...]}`), SendGrid arrays, Postmark payloads, and Mailgun JSON `event-data` payloads
 
 Admin triggers / review controls:
 - `POST /admin/run-discovery`

@@ -99,6 +99,15 @@ def _map_postmark_event_type(record_type: object, payload: dict[str, object]) ->
     return None
 
 
+def _map_mailgun_event_type(value: object) -> str | None:
+    name = str(value or "").strip().lower()
+    if name in {"failed", "bounced"}:
+        return "bounced"
+    if name in {"unsubscribed", "complained"}:
+        return "opt_out"
+    return None
+
+
 def _normalize_sendgrid_events(raw_events: list[object]) -> list[OutreachWebhookEvent]:
     normalized: list[OutreachWebhookEvent] = []
     for item in raw_events:
@@ -138,6 +147,24 @@ def _normalize_postmark_event(raw: dict[str, object]) -> OutreachWebhookRequest:
     )
 
 
+def _normalize_mailgun_event(raw_event_data: dict[str, object]) -> OutreachWebhookRequest:
+    event_type = _map_mailgun_event_type(raw_event_data.get("event"))
+    if not event_type:
+        return OutreachWebhookRequest(events=[])
+    event_id = raw_event_data.get("id")
+    recipient = raw_event_data.get("recipient")
+    return OutreachWebhookRequest(
+        events=[
+            OutreachWebhookEvent(
+                event_id=str(event_id).strip() if event_id else None,
+                event_type=event_type,
+                email_or_domain=str(recipient).strip().lower() if recipient else None,
+                payload=dict(raw_event_data),
+            )
+        ]
+    )
+
+
 def _parse_request_body(raw_body: bytes) -> OutreachWebhookRequest:
     try:
         raw = json.loads(raw_body)
@@ -149,6 +176,9 @@ def _parse_request_body(raw_body: bytes) -> OutreachWebhookRequest:
             return OutreachWebhookRequest.model_validate(raw)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
+
+    if isinstance(raw, dict) and isinstance(raw.get("event-data"), dict):
+        return _normalize_mailgun_event(raw["event-data"])
 
     if isinstance(raw, dict) and "RecordType" in raw:
         return _normalize_postmark_event(raw)
