@@ -42,6 +42,7 @@ Local-only path (without containers; requires local Postgres/Redis):
 
 Health:
 - `GET /healthz`
+- `GET /readyz`
 
 Leads / audits / issues:
 - `GET /leads`
@@ -61,8 +62,10 @@ Admin triggers / review controls:
 - `POST /admin/run-audit/{lead_id}`
 - `POST /admin/run-summarize/{lead_id}/{audit_id}`
 - `POST /admin/run-notion-sync/{lead_id}`
+- `POST /admin/create-gmail-draft/{draft_id}`
 - `POST /admin/approve-draft/{draft_id}`
 - `POST /admin/send-draft/{draft_id}` (manual send stub + daily cap)
+- `POST /admin/record-event/{lead_id}` (replied/bounced/opt_out/manual)
 - `POST /admin/mark-optout/{lead_id}`
 
 ## Tests
