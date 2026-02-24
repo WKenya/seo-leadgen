@@ -11,6 +11,12 @@ from app.schemas import EmailDraftRead, OutreachEventRead
 router = APIRouter(tags=["drafts"])
 
 
+@router.get("/events")
+def list_events(db: Session = Depends(get_db)) -> dict[str, object]:
+    events = db.execute(select(OutreachEvent).order_by(OutreachEvent.created_at.desc()).limit(200)).scalars().all()
+    return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events]}
+
+
 @router.get("/drafts")
 def list_drafts(
     lead_id: UUID | None = Query(default=None),
@@ -55,4 +61,3 @@ def list_lead_events(lead_id: UUID, db: Session = Depends(get_db)) -> dict[str, 
         .all()
     )
     return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events]}
-

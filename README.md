@@ -52,10 +52,14 @@ Leads / audits / issues:
 - `GET /audits/{audit_id}/issues`
 
 Drafts / events:
+- `GET /events`
 - `GET /drafts`
 - `GET /drafts/{draft_id}`
 - `GET /leads/{lead_id}/drafts`
 - `GET /leads/{lead_id}/events`
+
+Suppression:
+- `GET /suppression`
 
 Admin triggers / review controls:
 - `POST /admin/run-discovery`
@@ -67,6 +71,7 @@ Admin triggers / review controls:
 - `POST /admin/send-draft/{draft_id}` (manual send stub + daily cap)
 - `POST /admin/record-event/{lead_id}` (replied/bounced/opt_out/manual)
 - `POST /admin/mark-optout/{lead_id}`
+- `POST /admin/unsuppress/{lead_id}`
 
 ## Tests
 
