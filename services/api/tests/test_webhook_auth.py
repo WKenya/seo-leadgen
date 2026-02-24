@@ -8,10 +8,15 @@ API_ROOT = Path(__file__).resolve().parents[1]
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
-from app.webhook_auth import compute_signature, verify_hmac_request  # noqa: E402
+from app.webhook_auth import compute_signature, parse_signature_header, verify_hmac_request  # noqa: E402
 
 
 class WebhookAuthTests(unittest.TestCase):
+    def test_parse_signature_header_supports_composite_format(self) -> None:
+        timestamp, signature = parse_signature_header("t=1700000000, v1=abc123")
+        self.assertEqual(timestamp, "1700000000")
+        self.assertEqual(signature, "abc123")
+
     def test_verify_hmac_request_accepts_valid_signature(self) -> None:
         body = b'{"events":[]}'
         signature = compute_signature(secret="secret", body=body, timestamp=1700000000)
@@ -22,6 +27,18 @@ class WebhookAuthTests(unittest.TestCase):
             timestamp_header="1700000000",
             tolerance_seconds=300,
             now=1700000100,
+        )
+
+    def test_verify_hmac_request_accepts_composite_signature_header_without_timestamp_header(self) -> None:
+        body = b'{"events":[]}'
+        signature = compute_signature(secret="secret", body=body, timestamp=1700000000)
+        verify_hmac_request(
+            secret="secret",
+            body=body,
+            signature=f"t=1700000000,v1={signature}",
+            timestamp_header=None,
+            tolerance_seconds=300,
+            now=1700000001,
         )
 
     def test_verify_hmac_request_rejects_stale_timestamp(self) -> None:

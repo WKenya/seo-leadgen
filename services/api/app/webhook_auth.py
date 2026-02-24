@@ -14,6 +14,33 @@ def normalize_signature(value: str) -> str:
     return normalized
 
 
+def parse_signature_header(value: str | None) -> tuple[str | None, str | None]:
+    if value is None:
+        return (None, None)
+    raw = value.strip()
+    if not raw:
+        return (None, None)
+    if "," not in raw or "=" not in raw:
+        return (None, raw)
+
+    timestamp: str | None = None
+    signature: str | None = None
+    for part in raw.split(","):
+        item = part.strip()
+        if "=" not in item:
+            continue
+        key, val = item.split("=", 1)
+        key = key.strip().lower()
+        val = val.strip()
+        if not val:
+            continue
+        if key == "t" and timestamp is None:
+            timestamp = val
+        elif key in {"v1", "sha256"} and signature is None:
+            signature = val
+    return (timestamp, signature)
+
+
 def parse_unix_timestamp(value: str | None) -> int:
     if value is None or not value.strip():
         raise ValueError("missing_webhook_timestamp")
@@ -44,12 +71,15 @@ def verify_hmac_request(
 ) -> None:
     if not secret:
         raise ValueError("webhook_signature_secret_not_configured")
-    if not signature:
+    sig_timestamp, sig_value = parse_signature_header(signature)
+    effective_signature = sig_value or signature
+    effective_timestamp = timestamp_header or sig_timestamp
+    if not effective_signature:
         raise ValueError("missing_webhook_signature")
-    timestamp = parse_unix_timestamp(timestamp_header)
+    timestamp = parse_unix_timestamp(effective_timestamp)
     if not is_timestamp_fresh(timestamp, tolerance_seconds=tolerance_seconds, now=now):
         raise ValueError("stale_webhook_timestamp")
     expected = compute_signature(secret=secret, body=body, timestamp=timestamp)
-    provided = normalize_signature(signature)
+    provided = normalize_signature(effective_signature)
     if not secrets.compare_digest(provided, expected):
         raise ValueError("invalid_webhook_signature")
