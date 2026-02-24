@@ -144,4 +144,5 @@ check:
 	python3 -m compileall services/api/app services/worker/app migrations
 
 test:
+	python3 -m unittest discover -s services/api/tests -p 'test_*.py' -v
 	python3 -m unittest discover -s services/worker/tests -p 'test_*.py' -v
