@@ -38,6 +38,11 @@ class DiscoveryBatchRequest(BaseModel):
     limit: int | None = None
 
 
+class AuditBatchRequest(BaseModel):
+    statuses: list[str] = ["Discovered"]
+    limit: int = 25
+
+
 def _lead_suppression_key(lead: Lead) -> str | None:
     if lead.email:
         return lead.email.lower()
@@ -110,6 +115,22 @@ def run_discovery_batch(payload: DiscoveryBatchRequest) -> dict[str, object]:
 def run_audit(lead_id: str) -> dict[str, str]:
     task = celery_client.send_task("audit_lead", kwargs={"lead_id": lead_id})
     return {"lead_id": lead_id, "status": "queued", "task_id": task.id}
+
+
+@router.post("/run-audit-batch")
+def run_audit_batch(payload: AuditBatchRequest, db: Session = Depends(get_db)) -> dict[str, object]:
+    statuses = [s.strip() for s in payload.statuses if s.strip()]
+    limit = max(1, min(int(payload.limit), 200))
+    stmt = select(Lead).order_by(Lead.created_at.desc()).limit(limit)
+    if statuses:
+        stmt = stmt.where(Lead.status.in_(statuses))
+    leads = db.execute(stmt).scalars().all()
+
+    items: list[dict[str, str]] = []
+    for lead in leads:
+        task = celery_client.send_task("audit_lead", kwargs={"lead_id": str(lead.id)})
+        items.append({"lead_id": str(lead.id), "name": lead.name, "task_id": task.id})
+    return {"status": "queued", "count": len(items), "items": items}
 
 
 @router.post("/run-summarize/{lead_id}/{audit_id}")
