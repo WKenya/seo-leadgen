@@ -23,3 +23,34 @@ class LeadRead(BaseModel):
     def from_model(cls, lead: object) -> "LeadRead":
         return cls.model_validate(lead, from_attributes=True)
 
+
+class AuditRead(BaseModel):
+    id: UUID
+    lead_id: UUID
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    final_url: str | None = None
+    https_ok: bool | None = None
+    redirect_chain: object | None = None
+    cert_error: str | None = None
+    lighthouse_summary: object | None = None
+    crawl_summary: object | None = None
+    contact_signals: object | None = None
+    artifact_index: object | None = None
+
+    @classmethod
+    def from_model(cls, audit: object) -> "AuditRead":
+        return cls.model_validate(audit, from_attributes=True)
+
+
+class IssueRead(BaseModel):
+    id: UUID
+    audit_id: UUID
+    kind: str
+    severity: int
+    title: str
+    details: object | None = None
+
+    @classmethod
+    def from_model(cls, issue: object) -> "IssueRead":
+        return cls.model_validate(issue, from_attributes=True)
