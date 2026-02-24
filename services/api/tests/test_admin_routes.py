@@ -202,6 +202,72 @@ class AdminRouteTests(unittest.TestCase):
         events = self.db.execute(select(OutreachEvent)).scalars().all()
         self.assertTrue(any(event.type == "send_blocked_cap" for event in events))
 
+    def test_record_event_replied_updates_status(self) -> None:
+        from app.models import Lead, OutreachEvent
+
+        lead, _, _ = self._create_lead_with_draft()
+        response = self.client.post(
+            f"/admin/record-event/{lead.id}",
+            json={"event_type": "replied", "note": "Customer replied"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "recorded")
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Replied")
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertTrue(any(event.type == "replied" for event in events))
+
+    def test_record_event_opt_out_creates_suppression(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        response = self.client.post(
+            f"/admin/record-event/{lead.id}",
+            json={"event_type": "opt_out", "note": "Unsubscribe"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "recorded")
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+        self.assertEqual(suppression.email_or_domain, "owner@acme.example")
+        self.assertEqual(suppression.reason, "opt_out")
+
+    def test_record_event_invalid_type_is_rejected(self) -> None:
+        lead, _, _ = self._create_lead_with_draft()
+        response = self.client.post(
+            f"/admin/record-event/{lead.id}",
+            json={"event_type": "opened"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "invalid_event_type")
+
+    def test_mark_optout_then_unsuppress_restores_status(self) -> None:
+        from app.models import Lead, OutreachEvent, Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        mark = self.client.post(f"/admin/mark-optout/{lead.id}", json={"reason": "manual"})
+        self.assertEqual(mark.status_code, 200, mark.text)
+        self.assertEqual(mark.json()["status"], "suppressed")
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+
+        unmark = self.client.post(f"/admin/unsuppress/{lead.id}", json={})
+        self.assertEqual(unmark.status_code, 200, unmark.text)
+        self.assertEqual(unmark.json()["status"], "unsuppressed")
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Discovered")
+        remaining = self.db.execute(select(Suppression)).scalars().all()
+        self.assertEqual(len(remaining), 0)
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertTrue(any(event.type == "opt_out" for event in events))
+        self.assertTrue(any(event.type == "unsuppress" for event in events))
+
 
 if __name__ == "__main__":
     unittest.main()
