@@ -65,6 +65,9 @@ Suppression:
 Artifacts:
 - `GET /artifacts/{path}` (optional Basic Auth via `ARTIFACTS_BASIC_AUTH_*`)
 
+Webhooks:
+- `POST /webhooks/outreach-events` (`X-Webhook-Token` header, `WEBHOOK_SHARED_SECRET`)
+
 Admin triggers / review controls:
 - `POST /admin/run-discovery`
 - `POST /admin/run-discovery-batch`
