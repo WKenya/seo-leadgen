@@ -13,6 +13,7 @@ class Settings(BaseSettings):
         alias="DATABASE_URL",
     )
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
+    artifacts_root: str = Field(default="/data/artifacts", alias="ARTIFACTS_ROOT")
     google_places_api_key: str = Field(default="", alias="GOOGLE_PLACES_API_KEY")
     notion_token: str = Field(default="", alias="NOTION_TOKEN")
     notion_database_id: str = Field(default="", alias="NOTION_DATABASE_ID")

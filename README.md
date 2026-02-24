@@ -89,6 +89,7 @@ Notes:
 - audit checks now include basic SEO hygiene on the audited homepage (title/meta/canonical/robots noindex)
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
+- screenshot capture uses Playwright in worker; if browser/runtime missing, audit stores a screenshot error instead of failing the whole audit
 
 ## Tests
 
