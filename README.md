@@ -67,7 +67,7 @@ Artifacts:
 - `GET /artifacts/{path}` (optional Basic Auth via `ARTIFACTS_BASIC_AUTH_*`)
 
 Webhooks:
-- `POST /webhooks/outreach-events` (`X-Webhook-Token` header, `WEBHOOK_SHARED_SECRET`)
+- `POST /webhooks/outreach-events` (`X-Webhook-Signature` HMAC-SHA256 via `WEBHOOK_SIGNATURE_SECRET`, or fallback `X-Webhook-Token` / `WEBHOOK_SHARED_SECRET`)
   - supports optional per-event `event_id` for idempotent ingestion
 
 Admin triggers / review controls:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import secrets
 from urllib.parse import urlparse
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -36,6 +38,27 @@ def _require_webhook_secret(token: str | None) -> None:
         raise HTTPException(status_code=401, detail="invalid_webhook_token")
 
 
+def _normalize_signature(value: str) -> str:
+    value = value.strip()
+    for prefix in ("sha256=", "v1="):
+        if value.startswith(prefix):
+            return value[len(prefix) :]
+    return value
+
+
+def _verify_webhook_hmac(body: bytes, signature: str | None) -> None:
+    settings = get_settings()
+    secret = settings.webhook_signature_secret
+    if not secret:
+        return
+    if not signature:
+        raise HTTPException(status_code=401, detail="missing_webhook_signature")
+    expected = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    provided = _normalize_signature(signature)
+    if not secrets.compare_digest(provided, expected):
+        raise HTTPException(status_code=401, detail="invalid_webhook_signature")
+
+
 def _domain_from_url(url: str | None) -> str | None:
     if not url:
         return None
@@ -60,12 +83,22 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
 
 
 @router.post("/outreach-events")
-def ingest_outreach_events(
-    body: OutreachWebhookRequest,
+async def ingest_outreach_events(
+    request: Request,
     x_webhook_token: str | None = Header(default=None),
+    x_webhook_signature: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    _require_webhook_secret(x_webhook_token)
+    raw_body = await request.body()
+    settings = get_settings()
+    if settings.webhook_signature_secret:
+        _verify_webhook_hmac(raw_body, x_webhook_signature)
+    else:
+        _require_webhook_secret(x_webhook_token)
+    try:
+        body = OutreachWebhookRequest.model_validate_json(raw_body)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
 
     processed = 0
     duplicates = 0

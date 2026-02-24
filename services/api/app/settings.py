@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     artifacts_basic_auth_user: str = Field(default="", alias="ARTIFACTS_BASIC_AUTH_USER")
     artifacts_basic_auth_pass: str = Field(default="", alias="ARTIFACTS_BASIC_AUTH_PASS")
     webhook_shared_secret: str = Field(default="", alias="WEBHOOK_SHARED_SECRET")
+    webhook_signature_secret: str = Field(default="", alias="WEBHOOK_SIGNATURE_SECRET")
     daily_send_cap: int = Field(default=5, alias="DAILY_SEND_CAP")
 
 
