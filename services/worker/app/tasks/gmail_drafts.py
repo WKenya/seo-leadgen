@@ -21,27 +21,30 @@ def create_gmail_draft(draft_id: str) -> dict[str, object]:
         lead = session.get(Lead, draft.lead_id)
         if lead is None:
             raise RuntimeError(f"lead not found for draft: {draft_id}")
-        if not lead.email:
-            session.add(
-                OutreachEvent(
-                    lead_id=lead.id,
-                    type="drafted_skipped_no_email",
-                    payload={"draft_id": str(draft.id)},
-                )
-            )
-            session.commit()
-            return {"status": "skipped_no_email", "draft_id": draft_id, "gmail_mode": "none", "gmail_draft_url": None}
 
         # MVP fallback: keep manual send flow unless Gmail OAuth creds are configured.
-        gmail_mode = (
-            "api"
-            if settings.gmail_oauth_client_id and settings.gmail_oauth_client_secret and settings.gmail_oauth_refresh_token
-            else "manual"
-        )
-        gmail_error = None
-        if gmail_mode == "manual":
-            draft.gmail_draft_url = None
+        gmail_mode = "none"
+        status = "ok"
+        if lead.email:
+            gmail_mode = (
+                "api"
+                if settings.gmail_oauth_client_id and settings.gmail_oauth_client_secret and settings.gmail_oauth_refresh_token
+                else "manual"
+            )
         else:
+            status = "skipped_no_email"
+        gmail_error = None
+        if gmail_mode in {"none", "manual"}:
+            draft.gmail_draft_url = None
+            if gmail_mode == "none":
+                session.add(
+                    OutreachEvent(
+                        lead_id=lead.id,
+                        type="drafted_skipped_no_email",
+                        payload={"draft_id": str(draft.id)},
+                    )
+                )
+        elif gmail_mode == "api":
             try:
                 gmail_result = gmail_api_create_draft(
                     client_id=settings.gmail_oauth_client_id,
@@ -86,7 +89,7 @@ def create_gmail_draft(draft_id: str) -> dict[str, object]:
     celery_app.send_task("sync_notion", kwargs={"lead_id": lead_id, "audit_id": audit_id, "draft_id": draft_id})
 
     return {
-        "status": "ok",
+        "status": status,
         "draft_id": draft_id,
         "gmail_mode": gmail_mode,
         "gmail_draft_url": gmail_draft_url,
