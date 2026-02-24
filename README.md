@@ -61,6 +61,9 @@ Drafts / events:
 Suppression:
 - `GET /suppression`
 
+Artifacts:
+- `GET /artifacts/{path}` (optional Basic Auth via `ARTIFACTS_BASIC_AUTH_*`)
+
 Admin triggers / review controls:
 - `POST /admin/run-discovery`
 - `POST /admin/run-discovery-batch`

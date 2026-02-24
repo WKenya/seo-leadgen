@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
     artifacts_root: str = "/data/artifacts"
+    artifacts_basic_auth_user: str = Field(default="", alias="ARTIFACTS_BASIC_AUTH_USER")
+    artifacts_basic_auth_pass: str = Field(default="", alias="ARTIFACTS_BASIC_AUTH_PASS")
     daily_send_cap: int = Field(default=5, alias="DAILY_SEND_CAP")
 
 
