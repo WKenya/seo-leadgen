@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import secrets
 from urllib.parse import urlparse
 from uuid import UUID
@@ -77,6 +78,60 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
         db.add(Suppression(email_or_domain=value, reason=reason))
 
 
+def _map_sendgrid_event_type(value: object) -> str | None:
+    name = str(value or "").strip().lower()
+    if name == "bounce":
+        return "bounced"
+    if name in {"unsubscribe", "group_unsubscribe", "spamreport"}:
+        return "opt_out"
+    return None
+
+
+def _normalize_sendgrid_events(raw_events: list[object]) -> list[OutreachWebhookEvent]:
+    normalized: list[OutreachWebhookEvent] = []
+    for item in raw_events:
+        if not isinstance(item, dict):
+            continue
+        event_type = _map_sendgrid_event_type(item.get("event"))
+        if not event_type:
+            continue
+        event_id = item.get("sg_event_id") or item.get("smtp-id")
+        email_value = item.get("email")
+        normalized.append(
+            OutreachWebhookEvent(
+                event_id=str(event_id).strip() if event_id else None,
+                event_type=event_type,
+                email_or_domain=str(email_value).strip().lower() if email_value else None,
+                payload=dict(item),
+            )
+        )
+    return normalized
+
+
+def _parse_request_body(raw_body: bytes) -> OutreachWebhookRequest:
+    try:
+        raw = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
+
+    if isinstance(raw, dict) and "events" in raw:
+        try:
+            return OutreachWebhookRequest.model_validate(raw)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
+
+    if isinstance(raw, list):
+        return OutreachWebhookRequest(events=_normalize_sendgrid_events(raw))
+
+    if isinstance(raw, dict):
+        provider = str(raw.get("provider") or "").strip().lower()
+        provider_events = raw.get("provider_events")
+        if provider == "sendgrid" and isinstance(provider_events, list):
+            return OutreachWebhookRequest(events=_normalize_sendgrid_events(provider_events))
+
+    raise HTTPException(status_code=400, detail="invalid_body: unsupported webhook payload shape")
+
+
 @router.post("/outreach-events")
 async def ingest_outreach_events(
     request: Request,
@@ -91,10 +146,7 @@ async def ingest_outreach_events(
         _verify_webhook_hmac(raw_body, x_webhook_signature, x_webhook_timestamp)
     else:
         _require_webhook_secret(x_webhook_token)
-    try:
-        body = OutreachWebhookRequest.model_validate_json(raw_body)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
+    body = _parse_request_body(raw_body)
 
     processed = 0
     duplicates = 0

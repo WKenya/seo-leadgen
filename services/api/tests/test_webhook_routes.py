@@ -191,6 +191,45 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "stale_webhook_timestamp")
 
+    def test_webhook_token_mode_accepts_sendgrid_array_payload_and_suppresses(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json=[
+                {
+                    "email": "owner@acme.example",
+                    "event": "unsubscribe",
+                    "sg_event_id": "sg-evt-1",
+                    "timestamp": 1700000000,
+                }
+            ],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertIsNotNone(refreshed)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.email_or_domain, "owner@acme.example")
+        self.assertEqual(row.reason, "opt_out")
+
+    def test_webhook_token_mode_sendgrid_unmapped_event_is_noop(self) -> None:
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json=[{"email": "owner@acme.example", "event": "open", "sg_event_id": "sg-open-1"}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["duplicates"], 0)
+        self.assertEqual(body["rejected"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
