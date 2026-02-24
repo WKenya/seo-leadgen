@@ -73,6 +73,7 @@ def audit_lead(lead_id: str) -> dict[str, object]:
             "visited_pages": crawl_result.get("visited_pages"),
             "checked_links": crawl_result.get("checked_links"),
             "broken_links_count": crawl_result.get("broken_links_count"),
+            "seo_signals": crawl_result.get("seo_signals"),
         }
         audit.contact_signals = crawl_result.get("contact_signals")
         audit.artifact_index = {"screenshot": screenshot_result} if screenshot_result is not None else None
@@ -151,6 +152,7 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                 )
 
         contact_signals = crawl_result.get("contact_signals") or {}
+        seo_signals = crawl_result.get("seo_signals") or {}
         preferred_email = choose_preferred_email(contact_signals.get("emails_found") or [])
         if preferred_email and not lead.email:
             lead.email = preferred_email
@@ -174,6 +176,36 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                     details={"url": audit_target_url, "contact_signals": contact_signals},
                 )
             )
+        if not seo_signals.get("title_present"):
+            session.add(
+                Issue(
+                    audit_id=audit.id,
+                    kind="seo",
+                    severity=3,
+                    title="Missing title tag on audited homepage",
+                    details={"url": audit_target_url, "seo_signals": seo_signals},
+                )
+            )
+        if not seo_signals.get("meta_description_present"):
+            session.add(
+                Issue(
+                    audit_id=audit.id,
+                    kind="seo",
+                    severity=2,
+                    title="Missing meta description on audited homepage",
+                    details={"url": audit_target_url, "seo_signals": seo_signals},
+                )
+            )
+        if seo_signals.get("robots_noindex"):
+            session.add(
+                Issue(
+                    audit_id=audit.id,
+                    kind="seo",
+                    severity=4,
+                    title="Homepage robots meta includes noindex",
+                    details={"url": audit_target_url, "seo_signals": seo_signals},
+                )
+            )
 
         lead.status = "Audited"
         session.commit()
@@ -193,4 +225,5 @@ def audit_lead(lead_id: str) -> dict[str, object]:
         "lighthouse_error": lighthouse_error,
         "lighthouse_summary": lighthouse_summary,
         "lead_email": lead_email_value,
+        "seo_signals": seo_signals,
     }

@@ -10,6 +10,7 @@ if str(WORKER_ROOT) not in sys.path:
 
 from app.audit.extract import (  # noqa: E402
     choose_preferred_email,
+    extract_basic_seo_signals,
     extract_emails,
     extract_links,
     find_contact_signals,
@@ -57,6 +58,24 @@ class AuditExtractTests(unittest.TestCase):
         self.assertEqual(choose_preferred_email(emails), "owner@example.com")
         self.assertEqual(choose_preferred_email(["info@example.com"]), "info@example.com")
         self.assertIsNone(choose_preferred_email([]))
+
+    def test_extract_basic_seo_signals(self) -> None:
+        html = """
+        <html>
+          <head>
+            <title>Acme HVAC Cleveland</title>
+            <meta name="description" content="Fast HVAC service" />
+            <meta name="robots" content="index,follow" />
+            <link rel="canonical" href="/home" />
+          </head>
+        </html>
+        """
+        seo = extract_basic_seo_signals(html, "https://example.com")
+        self.assertTrue(seo["title_present"])
+        self.assertTrue(seo["meta_description_present"])
+        self.assertTrue(seo["canonical_present"])
+        self.assertEqual(seo["canonical_url"], "https://example.com/home")
+        self.assertFalse(seo["robots_noindex"])
 
 
 if __name__ == "__main__":

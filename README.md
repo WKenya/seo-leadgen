@@ -84,6 +84,7 @@ Admin triggers / review controls:
 
 Notes:
 - discovery uses Google Nearby Search when `radius_meters` > 0 (geocoded city center), then falls back to Text Search if needed
+- audit checks now include basic SEO hygiene on the audited homepage (title/meta/canonical/robots noindex)
 
 ## Tests
 

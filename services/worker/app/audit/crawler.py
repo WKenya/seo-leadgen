@@ -8,7 +8,13 @@ from urllib.robotparser import RobotFileParser
 
 import httpx
 
-from app.audit.extract import extract_links, find_contact_signals, is_internal_url, normalize_link
+from app.audit.extract import (
+    extract_basic_seo_signals,
+    extract_links,
+    find_contact_signals,
+    is_internal_url,
+    normalize_link,
+)
 
 
 @dataclass(slots=True)
@@ -54,6 +60,7 @@ def crawl_site(start_url: str, config: CrawlConfig) -> dict[str, object]:
         "has_mailto": False,
         "has_tel": False,
     }
+    seo_signals: dict[str, object] | None = None
     robots = _load_robots(start_url) if config.respect_robots else None
 
     with httpx.Client(timeout=15.0, headers={"User-Agent": "seo-lead-audit-bot/0.1"}) as client:
@@ -75,6 +82,8 @@ def crawl_site(start_url: str, config: CrawlConfig) -> dict[str, object]:
 
             html = response.text
             links = extract_links(html)
+            if seo_signals is None:
+                seo_signals = extract_basic_seo_signals(html, str(response.url))
             page_contact = find_contact_signals(html, str(response.url), links)
             if page_contact["has_contact_page"] and not contact_signals["has_contact_page"]:
                 contact_signals["has_contact_page"] = True
@@ -120,4 +129,5 @@ def crawl_site(start_url: str, config: CrawlConfig) -> dict[str, object]:
         "broken_links_count": len(broken_links),
         "broken_links": broken_links[:100],
         "contact_signals": contact_signals,
+        "seo_signals": seo_signals,
     }
