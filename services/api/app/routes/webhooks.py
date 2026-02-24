@@ -87,6 +87,18 @@ def _map_sendgrid_event_type(value: object) -> str | None:
     return None
 
 
+def _map_postmark_event_type(record_type: object, payload: dict[str, object]) -> str | None:
+    name = str(record_type or "").strip().lower()
+    if name == "bounce":
+        return "bounced"
+    if name in {"spamcomplaint", "spam_complaint"}:
+        return "opt_out"
+    if name == "subscriptionchange":
+        if bool(payload.get("SuppressSending")) or bool(payload.get("suppress_sending")):
+            return "opt_out"
+    return None
+
+
 def _normalize_sendgrid_events(raw_events: list[object]) -> list[OutreachWebhookEvent]:
     normalized: list[OutreachWebhookEvent] = []
     for item in raw_events:
@@ -108,6 +120,24 @@ def _normalize_sendgrid_events(raw_events: list[object]) -> list[OutreachWebhook
     return normalized
 
 
+def _normalize_postmark_event(raw: dict[str, object]) -> OutreachWebhookRequest:
+    event_type = _map_postmark_event_type(raw.get("RecordType"), raw)
+    if not event_type:
+        return OutreachWebhookRequest(events=[])
+    event_id = raw.get("MessageID") or raw.get("MessageId")
+    email_value = raw.get("Email") or raw.get("Recipient")
+    return OutreachWebhookRequest(
+        events=[
+            OutreachWebhookEvent(
+                event_id=str(event_id).strip() if event_id else None,
+                event_type=event_type,
+                email_or_domain=str(email_value).strip().lower() if email_value else None,
+                payload=dict(raw),
+            )
+        ]
+    )
+
+
 def _parse_request_body(raw_body: bytes) -> OutreachWebhookRequest:
     try:
         raw = json.loads(raw_body)
@@ -119,6 +149,9 @@ def _parse_request_body(raw_body: bytes) -> OutreachWebhookRequest:
             return OutreachWebhookRequest.model_validate(raw)
         except Exception as exc:  # noqa: BLE001
             raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
+
+    if isinstance(raw, dict) and "RecordType" in raw:
+        return _normalize_postmark_event(raw)
 
     if isinstance(raw, list):
         return OutreachWebhookRequest(events=_normalize_sendgrid_events(raw))

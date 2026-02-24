@@ -230,6 +230,39 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["duplicates"], 0)
         self.assertEqual(body["rejected"], [])
 
+    def test_webhook_token_mode_accepts_postmark_bounce_payload(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "RecordType": "Bounce",
+                "MessageID": "pm-1",
+                "Email": "owner@acme.example",
+                "Type": "HardBounce",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.reason, "bounced")
+
+    def test_webhook_token_mode_postmark_unmapped_event_is_noop(self) -> None:
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"RecordType": "Open", "MessageID": "pm-open-1", "Email": "owner@acme.example"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["duplicates"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()
