@@ -3,8 +3,8 @@
 Website fixer lead-gen system.
 
 Current status:
-- Milestone 1 scaffold in progress
-- FastAPI + Celery + Postgres/Redis + Node audit service layout created
+- MVP pipeline scaffold + core workflow implemented
+- Discovery (Google Places), audit (TLS/crawl/Lighthouse stub), drafting, Notion sync task, review/send controls
 
 See `docs/` for product, system, and implementation design.
 
@@ -18,3 +18,53 @@ Examples:
 Note:
 - `services/audit` is Node-based (Lighthouse-friendly), so it uses `npm`.
 
+## Quick Start
+
+Container path (Docker/Podman):
+- `make doctor`
+- `make standup`
+- `make logs`
+
+If `make standup` says Podman engine not ready:
+- `podman machine init` (first run)
+- `podman machine start`
+- rerun `make standup`
+
+Local-only path (without containers; requires local Postgres/Redis):
+- `make env`
+- `make install`
+- `make migrate-local`
+- `make api-dev`
+- `make worker-dev`
+- `make audit-dev`
+
+## API Endpoints (current)
+
+Health:
+- `GET /healthz`
+
+Leads / audits / issues:
+- `GET /leads`
+- `GET /leads/{lead_id}`
+- `GET /leads/{lead_id}/audits`
+- `GET /audits/{audit_id}`
+- `GET /audits/{audit_id}/issues`
+
+Drafts / events:
+- `GET /drafts`
+- `GET /drafts/{draft_id}`
+- `GET /leads/{lead_id}/drafts`
+- `GET /leads/{lead_id}/events`
+
+Admin triggers / review controls:
+- `POST /admin/run-discovery`
+- `POST /admin/run-audit/{lead_id}`
+- `POST /admin/run-summarize/{lead_id}/{audit_id}`
+- `POST /admin/run-notion-sync/{lead_id}`
+- `POST /admin/approve-draft/{draft_id}`
+- `POST /admin/send-draft/{draft_id}` (manual send stub + daily cap)
+- `POST /admin/mark-optout/{lead_id}`
+
+## Tests
+
+- `make test`
