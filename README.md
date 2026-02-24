@@ -68,6 +68,7 @@ Artifacts:
 
 Webhooks:
 - `POST /webhooks/outreach-events` (`X-Webhook-Token` header, `WEBHOOK_SHARED_SECRET`)
+  - supports optional per-event `event_id` for idempotent ingestion
 
 Admin triggers / review controls:
 - `POST /admin/run-discovery`

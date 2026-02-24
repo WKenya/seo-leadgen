@@ -92,6 +92,7 @@ class OutreachEvent(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id"), index=True)
+    external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True, unique=True)
     type: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -104,4 +105,3 @@ class Suppression(Base):
     email_or_domain: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     reason: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-

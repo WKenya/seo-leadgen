@@ -76,6 +76,7 @@ class EmailDraftRead(BaseModel):
 class OutreachEventRead(BaseModel):
     id: UUID
     lead_id: UUID
+    external_id: str | None = None
     type: str
     payload: object | None = None
     created_at: datetime | None = None

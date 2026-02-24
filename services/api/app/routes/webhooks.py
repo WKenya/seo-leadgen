@@ -17,6 +17,7 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 
 class OutreachWebhookEvent(BaseModel):
+    event_id: str | None = None
     event_type: str  # replied|bounced|opt_out
     lead_id: UUID | None = None
     email_or_domain: str | None = None
@@ -67,6 +68,7 @@ def ingest_outreach_events(
     _require_webhook_secret(x_webhook_token)
 
     processed = 0
+    duplicates = 0
     rejected: list[dict[str, object]] = []
     allowed = {"replied", "bounced", "opt_out"}
 
@@ -75,6 +77,12 @@ def ingest_outreach_events(
         if event_type not in allowed:
             rejected.append({"reason": "invalid_event_type", "event_type": item.event_type})
             continue
+        external_id = item.event_id.strip() if item.event_id else None
+        if external_id:
+            exists = db.execute(select(OutreachEvent).where(OutreachEvent.external_id == external_id)).scalar_one_or_none()
+            if exists is not None:
+                duplicates += 1
+                continue
 
         lead = db.get(Lead, item.lead_id) if item.lead_id else None
         if lead is None and item.email_or_domain:
@@ -99,6 +107,7 @@ def ingest_outreach_events(
         db.add(
             OutreachEvent(
                 lead_id=lead.id,
+                external_id=external_id,
                 type=event_type,
                 payload={
                     "source": "webhook",
@@ -110,5 +119,4 @@ def ingest_outreach_events(
         processed += 1
 
     db.commit()
-    return {"status": "ok", "processed": processed, "rejected": rejected}
-
+    return {"status": "ok", "processed": processed, "duplicates": duplicates, "rejected": rejected}
