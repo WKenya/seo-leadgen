@@ -5,8 +5,9 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from app.llm.openai_client import generate_draft_with_openai
 from app.llm.schemas import DraftOutput, QuickWin
-from app.models import Audit, EmailDraft, Issue, Lead, Suppression
+from app.models import Audit, EmailDraft, Issue, Lead, OutreachEvent, Suppression
 from app.settings import get_settings
 from app.db import SessionLocal
 from app.worker import celery_app
@@ -59,6 +60,50 @@ def _quick_win_from_issue(issue: Issue) -> QuickWin:
         why_it_matters=issue.title,
         how_to_fix="Review the cited page and apply the smallest reliable fix first.",
     )
+
+
+def _serialize_issue_for_llm(issue: Issue) -> dict[str, object]:
+    details = issue.details or {}
+    proof: dict[str, object] = {}
+    for key in ("url", "source_page", "status", "error", "cert_error", "redirect_chain", "lighthouse_summary"):
+        if key in details:
+            proof[key] = details.get(key)
+    return {
+        "id": str(issue.id),
+        "kind": issue.kind,
+        "severity": issue.severity,
+        "title": issue.title,
+        "proof": proof,
+    }
+
+
+def _audit_payload_for_llm(lead: Lead, audit: Audit, issues: list[Issue], settings) -> dict[str, object]:
+    return {
+        "lead": {
+            "name": lead.name,
+            "category": lead.category,
+            "website_url": lead.website_url,
+        },
+        "audit": {
+            "final_url": audit.final_url,
+            "https_ok": audit.https_ok,
+            "cert_error": audit.cert_error,
+            "crawl_summary": audit.crawl_summary,
+            "contact_signals": audit.contact_signals,
+            "lighthouse_summary": (audit.lighthouse_summary or {}).get("summary")
+            if isinstance(audit.lighthouse_summary, dict)
+            else None,
+        },
+        "issues": [_serialize_issue_for_llm(issue) for issue in issues[:20]],
+        "email_constraints": {
+            "max_words": 150,
+            "one_cta": True,
+            "sender_name": settings.sender_name,
+            "sender_email": settings.sender_email,
+            "physical_address": settings.physical_address,
+            "opt_out_instructions": settings.opt_out_instructions,
+        },
+    }
 
 
 def _build_fallback_draft(lead: Lead, audit: Audit, issues: list[Issue], settings) -> DraftOutput:
@@ -127,7 +172,24 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
             .scalars()
             .all()
         )
-        draft_output = _build_fallback_draft(lead, audit, issues, settings)
+        llm_mode = "fallback"
+        llm_error = None
+        draft_output: DraftOutput
+        if settings.openai_api_key and settings.openai_model:
+            try:
+                draft_output = generate_draft_with_openai(
+                    api_key=settings.openai_api_key,
+                    model=settings.openai_model,
+                    base_url=settings.openai_base_url,
+                    lead_name=lead.name,
+                    audit_payload=_audit_payload_for_llm(lead, audit, issues, settings),
+                )
+                llm_mode = "openai"
+            except Exception as exc:  # noqa: BLE001
+                llm_error = str(exc)
+                draft_output = _build_fallback_draft(lead, audit, issues, settings)
+        else:
+            draft_output = _build_fallback_draft(lead, audit, issues, settings)
 
         draft = EmailDraft(
             lead_id=lead.id,
@@ -137,9 +199,31 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
         )
         session.add(draft)
         lead.status = "Draft Ready"
+        session.add(
+            OutreachEvent(
+                lead_id=lead.id,
+                type="draft_generated",
+                payload={
+                    "draft_id": None,  # filled after refresh below if needed
+                    "audit_id": str(audit.id),
+                    "llm_mode": llm_mode,
+                    "llm_error": llm_error,
+                    "claims_used_count": len(draft_output.claims_used),
+                },
+            )
+        )
         session.commit()
         session.refresh(draft)
         draft_id = str(draft.id)
+        # Add a follow-up event with the persisted draft_id to make querying simple.
+        session.add(
+            OutreachEvent(
+                lead_id=lead.id,
+                type="draft_persisted",
+                payload={"draft_id": draft_id, "audit_id": str(audit.id), "llm_mode": llm_mode},
+            )
+        )
+        session.commit()
 
     celery_app.send_task("sync_notion", kwargs={"lead_id": lead_id, "audit_id": audit_id, "draft_id": draft_id})
     celery_app.send_task("create_gmail_draft", kwargs={"draft_id": draft_id})
@@ -150,4 +234,6 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
         "audit_id": audit_id,
         "draft_id": draft_id,
         "claims_used_count": len(draft_output.claims_used),
+        "llm_mode": llm_mode,
+        "llm_error": llm_error,
     }
