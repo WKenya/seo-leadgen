@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from app.drafts import extract_issue_proof, has_issue_proof
 from app.llm.openai_client import generate_draft_with_openai
 from app.llm.schemas import DraftOutput, QuickWin
 from app.models import Audit, EmailDraft, Issue, Lead, OutreachEvent, Suppression
@@ -63,21 +64,17 @@ def _quick_win_from_issue(issue: Issue) -> QuickWin:
 
 
 def _serialize_issue_for_llm(issue: Issue) -> dict[str, object]:
-    details = issue.details or {}
-    proof: dict[str, object] = {}
-    for key in ("url", "source_page", "status", "error", "cert_error", "redirect_chain", "lighthouse_summary"):
-        if key in details:
-            proof[key] = details.get(key)
     return {
         "id": str(issue.id),
         "kind": issue.kind,
         "severity": issue.severity,
         "title": issue.title,
-        "proof": proof,
+        "proof": extract_issue_proof(issue.details or {}),
     }
 
 
 def _audit_payload_for_llm(lead: Lead, audit: Audit, issues: list[Issue], settings) -> dict[str, object]:
+    proof_backed_issues = [issue for issue in issues if has_issue_proof(issue.details or {})]
     return {
         "lead": {
             "name": lead.name,
@@ -94,7 +91,7 @@ def _audit_payload_for_llm(lead: Lead, audit: Audit, issues: list[Issue], settin
             if isinstance(audit.lighthouse_summary, dict)
             else None,
         },
-        "issues": [_serialize_issue_for_llm(issue) for issue in issues[:20]],
+        "issues": [_serialize_issue_for_llm(issue) for issue in proof_backed_issues[:20]],
         "email_constraints": {
             "max_words": 150,
             "one_cta": True,
@@ -107,7 +104,8 @@ def _audit_payload_for_llm(lead: Lead, audit: Audit, issues: list[Issue], settin
 
 
 def _build_fallback_draft(lead: Lead, audit: Audit, issues: list[Issue], settings) -> DraftOutput:
-    top_issues = sorted(issues, key=lambda item: item.severity, reverse=True)[:3]
+    proof_backed_issues = [issue for issue in issues if has_issue_proof(issue.details or {})]
+    top_issues = sorted(proof_backed_issues, key=lambda item: item.severity, reverse=True)[:3]
     quick_wins = [_quick_win_from_issue(issue) for issue in top_issues]
     if not quick_wins:
         quick_wins = [
