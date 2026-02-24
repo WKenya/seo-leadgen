@@ -28,9 +28,11 @@ class NotionLeadsTests(unittest.TestCase):
         audit = SimpleNamespace(
             id=uuid.uuid4(),
             lead_id=lead.id,
+            final_url="https://acme.example/",
             cert_error=None,
             crawl_summary={"broken_links_count": 2},
             contact_signals={"has_contact_page": False},
+            artifact_index={"screenshot": {"artifact_path": "screenshots/acme.png"}},
         )
         draft = SimpleNamespace(
             id=uuid.uuid4(),
@@ -41,10 +43,17 @@ class NotionLeadsTests(unittest.TestCase):
             gmail_draft_url="https://mail.google.com/",
         )
 
-        props = lead_page_properties(lead=lead, audit=audit, draft=draft)
+        props = lead_page_properties(
+            lead=lead,
+            audit=audit,
+            draft=draft,
+            public_api_base_url="https://api.example.com",
+        )
         self.assertTrue(REQUIRED_NOTION_PROPERTIES.issubset(set(props.keys())))
         self.assertEqual(props["Website"]["url"], "https://acme.example")
         self.assertEqual(props["Gmail Draft Link"]["url"], "https://mail.google.com/")
+        proof_text = props["Proof"]["rich_text"][0]["text"]["content"]
+        self.assertIn("https://api.example.com/artifacts/screenshots/acme.png", proof_text)
 
 
 if __name__ == "__main__":

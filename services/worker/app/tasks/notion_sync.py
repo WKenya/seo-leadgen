@@ -38,14 +38,24 @@ def sync_notion(lead_id: str, audit_id: str | None = None, draft_id: str | None 
                 .first()
             )
 
-        payload_preview = lead_page_properties(lead=lead, audit=audit, draft=draft)
+        payload_preview = lead_page_properties(
+            lead=lead,
+            audit=audit,
+            draft=draft,
+            public_api_base_url=settings.public_api_base_url,
+        )
         notion_status = "skipped"
         page_id = lead.notion_page_id
         sync_error = None
         if settings.notion_token and settings.notion_database_id:
             try:
                 client = NotionLeadSyncClient(settings.notion_token, settings.notion_database_id)
-                page_id = client.upsert_lead_page(lead=lead, audit=audit, draft=draft)
+                page_id = client.upsert_lead_page(
+                    lead=lead,
+                    audit=audit,
+                    draft=draft,
+                    public_api_base_url=settings.public_api_base_url,
+                )
                 lead.notion_page_id = page_id
                 notion_status = "synced"
             except Exception as exc:  # noqa: BLE001

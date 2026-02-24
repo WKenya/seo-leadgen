@@ -29,14 +29,21 @@ REQUIRED_NOTION_PROPERTIES = {
 }
 
 
+def _artifact_url(public_api_base_url: str | None, artifact_path: str | None) -> str | None:
+    if not public_api_base_url or not artifact_path:
+        return None
+    return f"{public_api_base_url.rstrip('/')}/artifacts/{artifact_path.lstrip('/')}"
+
+
 def lead_page_properties(
     *,
     lead: Lead,
     audit: Audit | None = None,
     draft: EmailDraft | None = None,
+    public_api_base_url: str | None = None,
 ) -> dict[str, Any]:
     findings_lines: list[str] = []
-    proof_url = None
+    proof_lines: list[str] = []
     if audit:
         if audit.cert_error:
             findings_lines.append(f"TLS/cert issue: {audit.cert_error}")
@@ -46,6 +53,12 @@ def lead_page_properties(
                 findings_lines.append(f"Broken links found: {broken_count}")
         if audit.contact_signals and not audit.contact_signals.get("has_contact_page"):
             findings_lines.append("No contact page detected")
+        screenshot_path = (((audit.artifact_index or {}).get("screenshot") or {}).get("artifact_path") or None)
+        screenshot_url = _artifact_url(public_api_base_url, screenshot_path)
+        if screenshot_url:
+            proof_lines.append(f"Screenshot: {screenshot_url}")
+        if audit.final_url:
+            proof_lines.append(f"Audited URL: {audit.final_url}")
     if draft:
         draft_preview = draft.body_text[:1800]
     else:
@@ -61,7 +74,7 @@ def lead_page_properties(
         "Phone": {"rich_text": _rich_text(lead.phone)},
         "Address": {"rich_text": _rich_text(lead.address)},
         "Findings": {"rich_text": _rich_text("\n".join(findings_lines) if findings_lines else None)},
-        "Proof": {"rich_text": _rich_text(proof_url)},
+        "Proof": {"rich_text": _rich_text("\n".join(proof_lines) if proof_lines else None)},
         "Email Draft": {"rich_text": _rich_text(draft_preview)},
         "Gmail Draft Link": {"url": draft.gmail_draft_url if draft else None},
         "Opt-out": {"checkbox": lead.status == "Suppressed"},
@@ -87,8 +100,11 @@ class NotionLeadSyncClient:
         lead: Lead,
         audit: Audit | None = None,
         draft: EmailDraft | None = None,
+        public_api_base_url: str | None = None,
     ) -> str:
-        properties = lead_page_properties(lead=lead, audit=audit, draft=draft)
+        properties = lead_page_properties(
+            lead=lead, audit=audit, draft=draft, public_api_base_url=public_api_base_url
+        )
         available = self.get_database_property_names()
         missing = REQUIRED_NOTION_PROPERTIES - available
         if missing:
