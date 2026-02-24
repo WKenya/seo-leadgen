@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     crawl_delay_seconds: float = Field(default=1.0, alias="CRAWL_DELAY_SECONDS")
     audit_lighthouse_url: str = Field(default="http://audit:8081/run", alias="AUDIT_LIGHTHOUSE_URL")
     daily_send_cap: int = Field(default=5, alias="DAILY_SEND_CAP")
+    discovery_city: str = Field(default="Cleveland, OH", alias="DISCOVERY_CITY")
+    discovery_categories_csv: str = Field(default="HVAC,dentist", alias="DISCOVERY_CATEGORIES")
+    discovery_radius_meters: int = Field(default=15000, alias="DISCOVERY_RADIUS_METERS")
+    discovery_schedule_hour_utc: int = Field(default=11, alias="DISCOVERY_SCHEDULE_HOUR_UTC")
+    discovery_schedule_minute_utc: int = Field(default=15, alias="DISCOVERY_SCHEDULE_MINUTE_UTC")
+
+    @property
+    def discovery_categories(self) -> list[str]:
+        return [item.strip() for item in self.discovery_categories_csv.split(",") if item.strip()]
 
 
 @lru_cache(maxsize=1)

@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.settings import get_settings
 
@@ -13,6 +14,22 @@ celery_app.conf.update(
     enable_utc=True,
 )
 
+if settings.discovery_categories:
+    celery_app.conf.beat_schedule = {
+        f"discover-{category.lower().replace(' ', '-')}-daily": {
+            "task": "discover_leads",
+            "schedule": crontab(
+                hour=settings.discovery_schedule_hour_utc,
+                minute=settings.discovery_schedule_minute_utc,
+            ),
+            "kwargs": {
+                "city": settings.discovery_city,
+                "category": category,
+                "radius_meters": settings.discovery_radius_meters,
+            },
+        }
+        for category in settings.discovery_categories
+    }
+
 # Import task modules so Celery discovers decorated tasks.
 from app.tasks import audit, discover, gmail_drafts, notion_sync, summarize  # noqa: E402,F401
-
