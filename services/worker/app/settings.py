@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     discovery_city: str = Field(default="Cleveland, OH", alias="DISCOVERY_CITY")
     discovery_categories_csv: str = Field(default="HVAC,dentist", alias="DISCOVERY_CATEGORIES")
     discovery_radius_meters: int = Field(default=15000, alias="DISCOVERY_RADIUS_METERS")
+    discovery_limit_per_category: int = Field(default=20, alias="DISCOVERY_LIMIT_PER_CATEGORY")
     discovery_schedule_hour_utc: int = Field(default=11, alias="DISCOVERY_SCHEDULE_HOUR_UTC")
     discovery_schedule_minute_utc: int = Field(default=15, alias="DISCOVERY_SCHEDULE_MINUTE_UTC")
 

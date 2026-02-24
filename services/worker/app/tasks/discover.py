@@ -29,13 +29,14 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
 
 
 @celery_app.task(name="discover_leads")
-def discover_leads(city: str, category: str, radius_meters: int = 15000) -> dict[str, object]:
+def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: int | None = None) -> dict[str, object]:
     settings = get_settings()
     if not settings.google_places_api_key:
         raise RuntimeError("GOOGLE_PLACES_API_KEY is not configured")
 
     client = GooglePlacesClient(settings.google_places_api_key)
-    discovered = client.discover_leads(city=city, category=category, limit=20)
+    effective_limit = max(1, min(int(limit or settings.discovery_limit_per_category), 60))
+    discovered = client.discover_leads(city=city, category=category, limit=effective_limit)
 
     created = 0
     updated = 0
@@ -94,6 +95,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000) -> dict
         "city": city,
         "category": category,
         "radius_meters_requested": radius_meters,
+        "limit_requested": effective_limit,
         "discovered_count": len(discovered),
         "created": created,
         "updated": updated,

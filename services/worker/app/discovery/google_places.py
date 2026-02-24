@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
@@ -72,10 +73,35 @@ class GooglePlacesClient:
             raise RuntimeError(f"google_places_error: {status} {payload.get('error_message', '')}".strip())
         return payload
 
-    def text_search(self, *, city: str, category: str) -> list[dict[str, Any]]:
+    def text_search(self, *, city: str, category: str, page_token: str | None = None) -> dict[str, Any]:
         query = f"{category} in {city}"
-        payload = self._get("textsearch/json", {"query": query, "region": "us"})
-        return payload.get("results", [])
+        params: dict[str, Any] = {"query": query, "region": "us"}
+        if page_token:
+            params = {"pagetoken": page_token}
+        return self._get("textsearch/json", params)
+
+    def text_search_paginated(self, *, city: str, category: str, limit: int) -> list[dict[str, Any]]:
+        results: list[dict[str, Any]] = []
+        next_page_token: str | None = None
+        seen_place_ids: set[str] = set()
+        while len(results) < limit:
+            if next_page_token:
+                # Google Places pagination token often needs a short warm-up delay.
+                time.sleep(2.0)
+            payload = self.text_search(city=city, category=category, page_token=next_page_token)
+            for row in payload.get("results", []):
+                place_id = row.get("place_id")
+                if place_id and place_id in seen_place_ids:
+                    continue
+                if place_id:
+                    seen_place_ids.add(place_id)
+                results.append(row)
+                if len(results) >= limit:
+                    break
+            next_page_token = payload.get("next_page_token")
+            if not next_page_token:
+                break
+        return results[:limit]
 
     def place_details(self, place_id: str) -> dict[str, Any]:
         payload = self._get(
@@ -96,7 +122,7 @@ class GooglePlacesClient:
         return payload.get("result", {})
 
     def discover_leads(self, *, city: str, category: str, limit: int = 20) -> list[PlaceLead]:
-        results = self.text_search(city=city, category=category)
+        results = self.text_search_paginated(city=city, category=category, limit=limit)
         leads: list[PlaceLead] = []
         for row in results[:limit]:
             place_id = row.get("place_id")
@@ -117,4 +143,3 @@ class GooglePlacesClient:
                 )
             )
         return leads
-

@@ -26,6 +26,7 @@ if settings.discovery_categories:
                 "city": settings.discovery_city,
                 "category": category,
                 "radius_meters": settings.discovery_radius_meters,
+                "limit": settings.discovery_limit_per_category,
             },
         }
         for category in settings.discovery_categories

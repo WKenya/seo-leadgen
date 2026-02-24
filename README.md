@@ -63,6 +63,7 @@ Suppression:
 
 Admin triggers / review controls:
 - `POST /admin/run-discovery`
+- `POST /admin/run-discovery-batch`
 - `POST /admin/run-audit/{lead_id}`
 - `POST /admin/run-summarize/{lead_id}/{audit_id}`
 - `POST /admin/run-notion-sync/{lead_id}`

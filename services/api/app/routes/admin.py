@@ -31,6 +31,13 @@ class UnsuppressRequest(BaseModel):
     email_or_domain: str | None = None
 
 
+class DiscoveryBatchRequest(BaseModel):
+    city: str = "Cleveland, OH"
+    categories: list[str]
+    radius_meters: int = 15000
+    limit: int | None = None
+
+
 def _lead_suppression_key(lead: Lead) -> str | None:
     if lead.email:
         return lead.email.lower()
@@ -70,12 +77,33 @@ def run_discovery(
     city: str = "Cleveland, OH",
     category: str = "HVAC",
     radius_meters: int = 15000,
+    limit: int | None = None,
 ) -> dict[str, str]:
     task = celery_client.send_task(
         "discover_leads",
-        kwargs={"city": city, "category": category, "radius_meters": radius_meters},
+        kwargs={"city": city, "category": category, "radius_meters": radius_meters, "limit": limit},
     )
     return {"status": "queued", "task_id": task.id}
+
+
+@router.post("/run-discovery-batch")
+def run_discovery_batch(payload: DiscoveryBatchRequest) -> dict[str, object]:
+    items: list[dict[str, str]] = []
+    for raw_category in payload.categories:
+        category = raw_category.strip()
+        if not category:
+            continue
+        task = celery_client.send_task(
+            "discover_leads",
+            kwargs={
+                "city": payload.city,
+                "category": category,
+                "radius_meters": payload.radius_meters,
+                "limit": payload.limit,
+            },
+        )
+        items.append({"category": category, "task_id": task.id})
+    return {"status": "queued", "count": len(items), "items": items}
 
 
 @router.post("/run-audit/{lead_id}")
