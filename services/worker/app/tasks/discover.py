@@ -44,7 +44,12 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
 
     client = GooglePlacesClient(settings.google_places_api_key)
     effective_limit = max(1, min(int(limit or settings.discovery_limit_per_category), 60))
-    discovered = client.discover_leads(city=city, category=category, limit=effective_limit)
+    discovered = client.discover_leads(
+        city=city,
+        category=category,
+        limit=effective_limit,
+        radius_meters=radius_meters,
+    )
 
     created = 0
     updated = 0

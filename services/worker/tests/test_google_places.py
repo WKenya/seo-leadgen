@@ -8,7 +8,7 @@ WORKER_ROOT = Path(__file__).resolve().parents[1]
 if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
-from app.discovery.google_places import normalize_website_url  # noqa: E402
+from app.discovery.google_places import GooglePlacesClient, normalize_website_url  # noqa: E402
 
 
 class GooglePlacesTests(unittest.TestCase):
@@ -24,7 +24,45 @@ class GooglePlacesTests(unittest.TestCase):
         self.assertIsNone(normalize_website_url(""))
         self.assertIsNone(normalize_website_url(None))
 
+    def test_collect_paginated_dedupes_place_ids(self) -> None:
+        client = GooglePlacesClient(api_key="x")
+        client._wait_for_page_token = lambda: None  # type: ignore[method-assign]
+        pages = [
+            {"results": [{"place_id": "1"}, {"place_id": "2"}], "next_page_token": "n1"},
+            {"results": [{"place_id": "2"}, {"place_id": "3"}]},
+        ]
+
+        def fetch(page_token):
+            if page_token is None:
+                return pages[0]
+            return pages[1]
+
+        rows = client._collect_paginated(fetch, limit=10)
+        self.assertEqual([row["place_id"] for row in rows], ["1", "2", "3"])
+
+    def test_discover_leads_falls_back_to_text_search_when_nearby_empty(self) -> None:
+        class FakeClient(GooglePlacesClient):
+            def __init__(self) -> None:
+                super().__init__(api_key="x")
+                self.called: list[str] = []
+
+            def nearby_search_paginated(self, *, city, category, radius_meters, limit):  # type: ignore[override]
+                self.called.append("nearby")
+                return []
+
+            def text_search_paginated(self, *, city, category, limit):  # type: ignore[override]
+                self.called.append("text")
+                return [{"place_id": "p1", "name": "Acme", "formatted_address": "123 Main"}]
+
+            def place_details(self, place_id):  # type: ignore[override]
+                return {"name": "Acme", "website": "acme.example", "formatted_phone_number": "216-555-0100"}
+
+        client = FakeClient()
+        leads = client.discover_leads(city="Cleveland, OH", category="HVAC", limit=5, radius_meters=15000)
+        self.assertEqual(client.called, ["nearby", "text"])
+        self.assertEqual(len(leads), 1)
+        self.assertEqual(leads[0].website_url, "https://acme.example")
+
 
 if __name__ == "__main__":
     unittest.main()
-

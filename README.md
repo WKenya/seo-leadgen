@@ -82,6 +82,9 @@ Admin triggers / review controls:
 - `POST /admin/mark-optout/{lead_id}`
 - `POST /admin/unsuppress/{lead_id}`
 
+Notes:
+- discovery uses Google Nearby Search when `radius_meters` > 0 (geocoded city center), then falls back to Text Search if needed
+
 ## Tests
 
 - `make test`
