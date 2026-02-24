@@ -488,37 +488,39 @@ Integration tests:
 
 ## 16) Milestones (Codex-friendly)
 
+Status note (2026-02-24): checklist updated to reflect implementation progress in repo. Remaining notable gaps: Notion board view setup instructions doc polish, broader API route/integration tests, full container E2E smoke on running Docker/Podman engine.
+
 ### Milestone 1 — Skeleton + infra
-- [ ] Repo + uv projects for api/worker
-- [ ] docker-compose with api/worker/db/redis/audit
-- [ ] DB migrations + models
+- [x] Repo + uv projects for api/worker
+- [x] docker-compose with api/worker/db/redis/audit
+- [x] DB migrations + models
 
 ### Milestone 2 — Notion board integration
-- [ ] Create Notion DB schema doc + property mapping
-- [ ] Create/update lead pages
+- [x] Create Notion DB schema doc + property mapping
+- [x] Create/update lead pages
 - [ ] Board views manual setup instructions
 
 ### Milestone 3 — Lead discovery
-- [ ] Places API calls (search + details)
-- [ ] Upsert leads
-- [ ] Sync to Notion (Status=Discovered)
+- [x] Places API calls (search + details)
+- [x] Upsert leads
+- [x] Sync to Notion (Status=Discovered)
 
 ### Milestone 4 — Audit pipeline
-- [ ] HTTPS/redirect/cert checks
-- [ ] Crawl broken links (10 pages)
-- [ ] Contact signals extraction
-- [ ] Screenshot artifact + serving route
-- [ ] Lighthouse call + store summary
+- [x] HTTPS/redirect/cert checks
+- [x] Crawl broken links (10 pages)
+- [x] Contact signals extraction
+- [x] Screenshot artifact + serving route
+- [x] Lighthouse call + store summary
 
 ### Milestone 5 — LLM summary + email draft
-- [ ] Structured output generation
-- [ ] Proof-only rule enforced
-- [ ] Write email draft into Notion
+- [x] Structured output generation
+- [x] Proof-only rule enforced
+- [x] Write email draft into Notion
 
 ### Milestone 6 — Human approval workflow
-- [ ] Create Gmail drafts OR store ready-to-send content
-- [ ] Add suppression list + opt-out flag
-- [ ] Enforce daily cap
+- [x] Create Gmail drafts OR store ready-to-send content
+- [x] Add suppression list + opt-out flag
+- [x] Enforce daily cap
 
 ---
 
@@ -540,4 +542,3 @@ Integration tests:
    - reply + link to opt-out page (requires small web page)
 
 If you answer 1–4, Codex can implement with clean defaults for the rest.
-
