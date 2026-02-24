@@ -7,6 +7,7 @@ from sqlalchemy import delete
 
 from app.audit.crawler import CrawlConfig, crawl_site
 from app.audit.extract import choose_preferred_email
+from app.audit.issues import aggregate_broken_links
 from app.audit.lighthouse_client import normalize_lighthouse_summary, run_lighthouse
 from app.audit.screenshots import capture_homepage_screenshot
 from app.audit.tls_check import check_tls
@@ -55,6 +56,10 @@ def audit_lead(lead_id: str) -> dict[str, object]:
             screenshot_result = capture_homepage_screenshot(audit_target_url)
         except Exception as exc:  # noqa: BLE001
             screenshot_result = {"status": "error", "error": str(exc), "artifact_path": None}
+        broken_issue_groups = aggregate_broken_links(
+            crawl_result.get("broken_links") or [],
+            max_groups=settings.audit_max_broken_link_issues,
+        )
 
         audit.final_url = tls_result.get("final_url")
         audit.https_ok = tls_result.get("https_ok")
@@ -73,6 +78,7 @@ def audit_lead(lead_id: str) -> dict[str, object]:
             "visited_pages": crawl_result.get("visited_pages"),
             "checked_links": crawl_result.get("checked_links"),
             "broken_links_count": crawl_result.get("broken_links_count"),
+            "broken_link_issue_groups": len(broken_issue_groups),
             "seo_signals": crawl_result.get("seo_signals"),
         }
         audit.contact_signals = crawl_result.get("contact_signals")
@@ -107,13 +113,13 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                 )
             )
 
-        for broken in (crawl_result.get("broken_links") or [])[:50]:
+        for broken in broken_issue_groups:
             session.add(
                 Issue(
                     audit_id=audit.id,
                     kind="broken_link",
                     severity=severity,
-                    title=f"Broken link: {broken.get('url')}",
+                    title=f"Broken link ({broken.get('occurrences')}x): {broken.get('url')}",
                     details=broken,
                 )
             )
@@ -221,6 +227,7 @@ def audit_lead(lead_id: str) -> dict[str, object]:
         "https_ok": tls_result.get("https_ok"),
         "cert_error": tls_result.get("cert_error"),
         "broken_links_count": crawl_result.get("broken_links_count"),
+        "broken_link_issue_groups": len(broken_issue_groups),
         "visited_pages": crawl_result.get("visited_pages"),
         "lighthouse_error": lighthouse_error,
         "lighthouse_summary": lighthouse_summary,

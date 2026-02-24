@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     opt_out_instructions: str = Field(default='Reply "unsubscribe"', alias="OPT_OUT_INSTRUCTIONS")
     crawl_max_pages: int = Field(default=10, alias="CRAWL_MAX_PAGES")
     crawl_delay_seconds: float = Field(default=1.0, alias="CRAWL_DELAY_SECONDS")
+    audit_max_broken_link_issues: int = Field(default=25, alias="AUDIT_MAX_BROKEN_LINK_ISSUES")
     audit_lighthouse_url: str = Field(default="http://audit:8081/run", alias="AUDIT_LIGHTHOUSE_URL")
     daily_send_cap: int = Field(default=5, alias="DAILY_SEND_CAP")
     discovery_city: str = Field(default="Cleveland, OH", alias="DISCOVERY_CITY")
