@@ -27,6 +27,10 @@ class RecordEventRequest(BaseModel):
     suppress: bool | None = None
 
 
+class UnsuppressRequest(BaseModel):
+    email_or_domain: str | None = None
+
+
 def _lead_suppression_key(lead: Lead) -> str | None:
     if lead.email:
         return lead.email.lower()
@@ -208,6 +212,32 @@ def record_event(
     )
     db.commit()
     return {"lead_id": str(lead_id), "status": "recorded", "event_type": event_type}
+
+
+@router.post("/unsuppress/{lead_id}")
+def unsuppress_lead(
+    lead_id: UUID,
+    payload: UnsuppressRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        return {"lead_id": str(lead_id), "status": "not_found"}
+
+    value = payload.email_or_domain or _lead_suppression_key(lead)
+    if not value:
+        return {"lead_id": str(lead_id), "status": "missing_suppression_target"}
+
+    suppression = db.execute(select(Suppression).where(Suppression.email_or_domain == value)).scalar_one_or_none()
+    if suppression is None:
+        return {"lead_id": str(lead_id), "status": "not_suppressed"}
+
+    db.delete(suppression)
+    if lead.status == "Suppressed":
+        lead.status = "Discovered"
+    db.add(OutreachEvent(lead_id=lead.id, type="unsuppress", payload={"value": value}))
+    db.commit()
+    return {"lead_id": str(lead_id), "status": "unsuppressed"}
 
 
 @router.post("/mark-optout/{lead_id}")

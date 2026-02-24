@@ -83,3 +83,14 @@ class OutreachEventRead(BaseModel):
     @classmethod
     def from_model(cls, event: object) -> "OutreachEventRead":
         return cls.model_validate(event, from_attributes=True)
+
+
+class SuppressionRead(BaseModel):
+    id: UUID
+    email_or_domain: str
+    reason: str
+    created_at: datetime | None = None
+
+    @classmethod
+    def from_model(cls, suppression: object) -> "SuppressionRead":
+        return cls.model_validate(suppression, from_attributes=True)
