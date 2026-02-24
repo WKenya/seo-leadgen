@@ -49,6 +49,7 @@ Leads / audits / issues:
 - `GET /leads`
 - `GET /leads/{lead_id}`
 - `GET /leads/{lead_id}/audits`
+- `GET /leads/{lead_id}/pipeline`
 - `GET /audits/{audit_id}`
 - `GET /audits/{audit_id}/issues`
 
