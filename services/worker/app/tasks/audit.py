@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import delete
 
 from app.audit.crawler import CrawlConfig, crawl_site
-from app.audit.lighthouse_client import run_lighthouse
+from app.audit.lighthouse_client import normalize_lighthouse_summary, run_lighthouse
 from app.audit.screenshots import capture_homepage_screenshot
 from app.audit.tls_check import check_tls
 from app.db import SessionLocal
@@ -47,6 +47,7 @@ def audit_lead(lead_id: str) -> dict[str, object]:
             lighthouse_result = run_lighthouse(settings.audit_lighthouse_url, audit_target_url)
         except Exception as exc:  # noqa: BLE001
             lighthouse_error = str(exc)
+        lighthouse_summary = normalize_lighthouse_summary(lighthouse_result) if lighthouse_result else None
 
         screenshot_result = None
         try:
@@ -59,7 +60,11 @@ def audit_lead(lead_id: str) -> dict[str, object]:
         audit.redirect_chain = tls_result.get("redirect_chain")
         audit.cert_error = tls_result.get("cert_error")
         audit.lighthouse_summary = (
-            {"result": lighthouse_result, "error": lighthouse_error}
+            {
+                "summary": lighthouse_summary,
+                "error": lighthouse_error,
+                "raw": lighthouse_result if lighthouse_result is not None else None,
+            }
             if (lighthouse_result is not None or lighthouse_error)
             else None
         )
@@ -120,6 +125,29 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                     details={"error": lighthouse_error, "url": audit_target_url},
                 )
             )
+        elif lighthouse_summary:
+            perf_score = lighthouse_summary.get("performance_score")
+            seo_score = lighthouse_summary.get("seo_score")
+            if isinstance(perf_score, int) and perf_score < 70:
+                session.add(
+                    Issue(
+                        audit_id=audit.id,
+                        kind="perf",
+                        severity=3 if perf_score >= 50 else 4,
+                        title=f"Low Lighthouse performance score ({perf_score})",
+                        details={"url": audit_target_url, "lighthouse_summary": lighthouse_summary},
+                    )
+                )
+            if isinstance(seo_score, int) and seo_score < 80:
+                session.add(
+                    Issue(
+                        audit_id=audit.id,
+                        kind="seo",
+                        severity=2,
+                        title=f"Lighthouse SEO score can improve ({seo_score})",
+                        details={"url": audit_target_url, "lighthouse_summary": lighthouse_summary},
+                    )
+                )
 
         lead.status = "Audited"
         session.commit()
@@ -136,4 +164,5 @@ def audit_lead(lead_id: str) -> dict[str, object]:
         "broken_links_count": crawl_result.get("broken_links_count"),
         "visited_pages": crawl_result.get("visited_pages"),
         "lighthouse_error": lighthouse_error,
+        "lighthouse_summary": lighthouse_summary,
     }
