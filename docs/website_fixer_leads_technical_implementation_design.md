@@ -297,6 +297,36 @@ Properties (must match what code expects):
 
 Implementation note: store Notion `page_id` in `leads.notion_page_id` and update in place.
 
+### Board views (manual setup instructions)
+
+Create these views in the Notion `Leads` database after properties exist:
+
+1) `Pipeline` (Board)
+- Group by: `Status`
+- Visible groups (recommended order): `Discovered`, `Audited`, `Draft Ready`, `Approved`, `Drafted`, `Sent`, `Replied`, `Suppressed`
+- Card preview fields: `Category`, `Website`, `Email`, `Gmail Draft Link`, `Opt-out`
+- Sort: `Status` (manual board order), then `Name` ascending
+
+2) `Needs Review` (Table)
+- Filter: `Status` is `Draft Ready` OR `Approved`
+- Filter: `Opt-out` is unchecked
+- Columns visible: `Name`, `Category`, `Findings`, `Proof`, `Email Draft`, `Gmail Draft Link`, `Status`
+- Sort: `Last edited time` descending (or `Last Contacted` descending if you add automations)
+
+3) `Suppressed` (Table)
+- Filter: `Opt-out` is checked OR `Status` is `Suppressed`
+- Columns visible: `Name`, `Email`, `Website`, `Status`, `Notes`
+
+4) `Ready To Send` (Table, optional if using Gmail drafts)
+- Filter: `Status` is `Approved`
+- Filter: `Opt-out` is unchecked
+- Columns visible: `Name`, `Email`, `Email Draft`, `Gmail Draft Link`, `Proof`
+
+Operational notes:
+- Keep `Status` select option names exactly aligned with app writes (case-sensitive enough to matter operationally).
+- `Proof` can contain artifact links served from `/artifacts/*`; enable API Basic Auth if exposed beyond localhost.
+- `Gmail Draft Link` may be empty when OAuth is not configured (manual copy/paste workflow remains valid MVP).
+
 ---
 
 ## 8) Task queue design (Celery)
@@ -488,7 +518,7 @@ Integration tests:
 
 ## 16) Milestones (Codex-friendly)
 
-Status note (2026-02-24): checklist updated to reflect implementation progress in repo. Remaining notable gaps: Notion board view setup instructions doc polish, broader API route/integration tests, full container E2E smoke on running Docker/Podman engine.
+Status note (2026-02-24): checklist updated to reflect implementation progress in repo. Remaining notable gaps: broader API route/integration tests, full container E2E smoke on running Docker/Podman engine.
 
 ### Milestone 1 — Skeleton + infra
 - [x] Repo + uv projects for api/worker
@@ -498,7 +528,7 @@ Status note (2026-02-24): checklist updated to reflect implementation progress i
 ### Milestone 2 — Notion board integration
 - [x] Create Notion DB schema doc + property mapping
 - [x] Create/update lead pages
-- [ ] Board views manual setup instructions
+- [x] Board views manual setup instructions
 
 ### Milestone 3 — Lead discovery
 - [x] Places API calls (search + details)
