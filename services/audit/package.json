@@ -7,7 +7,8 @@
     "start": "node src/server.js"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "chrome-launcher": "latest",
+    "express": "^4.21.2",
+    "lighthouse": "latest"
   }
 }
-

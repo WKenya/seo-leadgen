@@ -85,6 +85,7 @@ Admin triggers / review controls:
 Notes:
 - discovery uses Google Nearby Search when `radius_meters` > 0 (geocoded city center), then falls back to Text Search if needed
 - audit checks now include basic SEO hygiene on the audited homepage (title/meta/canonical/robots noindex)
+- `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 
 ## Tests
 
