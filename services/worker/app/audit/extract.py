@@ -67,3 +67,13 @@ def find_contact_signals(html_text: str, base_url: str, links: list[str]) -> dic
         "has_mailto": has_mailto,
         "has_tel": has_tel,
     }
+
+
+def choose_preferred_email(emails: list[str]) -> str | None:
+    if not emails:
+        return None
+    lower = [e.lower() for e in emails]
+    non_role = [e for e in lower if not e.startswith(("admin@", "info@", "support@", "hello@", "contact@"))]
+    if non_role:
+        return sorted(non_role)[0]
+    return sorted(lower)[0]

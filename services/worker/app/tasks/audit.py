@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import delete
 
 from app.audit.crawler import CrawlConfig, crawl_site
+from app.audit.extract import choose_preferred_email
 from app.audit.lighthouse_client import normalize_lighthouse_summary, run_lighthouse
 from app.audit.screenshots import capture_homepage_screenshot
 from app.audit.tls_check import check_tls
@@ -149,9 +150,35 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                     )
                 )
 
+        contact_signals = crawl_result.get("contact_signals") or {}
+        preferred_email = choose_preferred_email(contact_signals.get("emails_found") or [])
+        if preferred_email and not lead.email:
+            lead.email = preferred_email
+        if not contact_signals.get("has_contact_page"):
+            session.add(
+                Issue(
+                    audit_id=audit.id,
+                    kind="contact",
+                    severity=3,
+                    title="No contact page detected",
+                    details={"url": audit_target_url, "contact_signals": contact_signals},
+                )
+            )
+        if not contact_signals.get("has_mailto") and not contact_signals.get("emails_found"):
+            session.add(
+                Issue(
+                    audit_id=audit.id,
+                    kind="contact",
+                    severity=2,
+                    title="No email contact found in crawl",
+                    details={"url": audit_target_url, "contact_signals": contact_signals},
+                )
+            )
+
         lead.status = "Audited"
         session.commit()
         audit_id_value = str(audit.id)
+        lead_email_value = lead.email
 
     celery_app.send_task("summarize_and_draft", kwargs={"lead_id": lead_id, "audit_id": audit_id_value})
 
@@ -165,4 +192,5 @@ def audit_lead(lead_id: str) -> dict[str, object]:
         "visited_pages": crawl_result.get("visited_pages"),
         "lighthouse_error": lighthouse_error,
         "lighthouse_summary": lighthouse_summary,
+        "lead_email": lead_email_value,
     }

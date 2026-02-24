@@ -9,6 +9,7 @@ if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
 from app.audit.extract import (  # noqa: E402
+    choose_preferred_email,
     extract_emails,
     extract_links,
     find_contact_signals,
@@ -51,7 +52,12 @@ class AuditExtractTests(unittest.TestCase):
         self.assertTrue(signals["has_tel"])
         self.assertIn("team@example.com", signals["emails_found"])
 
+    def test_choose_preferred_email_prefers_non_role_address(self) -> None:
+        emails = ["info@example.com", "owner@example.com", "support@example.com"]
+        self.assertEqual(choose_preferred_email(emails), "owner@example.com")
+        self.assertEqual(choose_preferred_email(["info@example.com"]), "info@example.com")
+        self.assertIsNone(choose_preferred_email([]))
+
 
 if __name__ == "__main__":
     unittest.main()
-
