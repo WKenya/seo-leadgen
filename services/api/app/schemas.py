@@ -54,3 +54,32 @@ class IssueRead(BaseModel):
     @classmethod
     def from_model(cls, issue: object) -> "IssueRead":
         return cls.model_validate(issue, from_attributes=True)
+
+
+class EmailDraftRead(BaseModel):
+    id: UUID
+    lead_id: UUID
+    audit_id: UUID
+    subject: str
+    body_text: str
+    created_at: datetime | None = None
+    approved_at: datetime | None = None
+    sent_at: datetime | None = None
+    gmail_draft_id: str | None = None
+    gmail_draft_url: str | None = None
+
+    @classmethod
+    def from_model(cls, draft: object) -> "EmailDraftRead":
+        return cls.model_validate(draft, from_attributes=True)
+
+
+class OutreachEventRead(BaseModel):
+    id: UUID
+    lead_id: UUID
+    type: str
+    payload: object | None = None
+    created_at: datetime | None = None
+
+    @classmethod
+    def from_model(cls, event: object) -> "OutreachEventRead":
+        return cls.model_validate(event, from_attributes=True)

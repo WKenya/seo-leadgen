@@ -15,9 +15,9 @@ class Settings(BaseSettings):
     )
     redis_url: str = Field(default="redis://redis:6379/0", alias="REDIS_URL")
     artifacts_root: str = "/data/artifacts"
+    daily_send_cap: int = Field(default=5, alias="DAILY_SEND_CAP")
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
-
