@@ -3,7 +3,7 @@ from urllib.parse import urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,13 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 class OptOutRequest(BaseModel):
     reason: str = "manual"
     email_or_domain: str | None = None
+
+
+class RecordEventRequest(BaseModel):
+    event_type: str = Field(description="replied|bounced|opt_out|manual")
+    note: str | None = None
+    email_or_domain: str | None = None
+    suppress: bool | None = None
 
 
 def _lead_suppression_key(lead: Lead) -> str | None:
@@ -46,6 +53,12 @@ def _sent_count_today(db: Session) -> int:
     end = start + timedelta(days=1)
     stmt = select(func.count()).select_from(EmailDraft).where(EmailDraft.sent_at >= start, EmailDraft.sent_at < end)
     return int(db.execute(stmt).scalar_one())
+
+
+def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
+    suppression = db.execute(select(Suppression).where(Suppression.email_or_domain == value)).scalar_one_or_none()
+    if suppression is None:
+        db.add(Suppression(email_or_domain=value, reason=reason))
 
 
 @router.post("/run-discovery")
@@ -81,6 +94,12 @@ def run_notion_sync(
 ) -> dict[str, str]:
     task = celery_client.send_task("sync_notion", kwargs={"lead_id": lead_id, "audit_id": audit_id, "draft_id": draft_id})
     return {"lead_id": lead_id, "status": "queued", "task_id": task.id}
+
+
+@router.post("/create-gmail-draft/{draft_id}")
+def queue_gmail_draft(draft_id: str) -> dict[str, str]:
+    task = celery_client.send_task("create_gmail_draft", kwargs={"draft_id": draft_id})
+    return {"draft_id": draft_id, "status": "queued", "task_id": task.id}
 
 
 @router.post("/approve-draft/{draft_id}")
@@ -151,6 +170,46 @@ def send_draft(draft_id: UUID, db: Session = Depends(get_db)) -> dict[str, str]:
     return {"draft_id": str(draft_id), "status": "sent_stubbed"}
 
 
+@router.post("/record-event/{lead_id}")
+def record_event(
+    lead_id: UUID,
+    payload: RecordEventRequest,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    lead = db.get(Lead, lead_id)
+    if lead is None:
+        return {"lead_id": str(lead_id), "status": "not_found"}
+
+    event_type = payload.event_type.strip().lower()
+    if event_type not in {"replied", "bounced", "opt_out", "manual"}:
+        return {"lead_id": str(lead_id), "status": "invalid_event_type"}
+
+    suppression_target = payload.email_or_domain or _lead_suppression_key(lead)
+    should_suppress = payload.suppress
+    if should_suppress is None:
+        should_suppress = event_type in {"bounced", "opt_out"}
+
+    if should_suppress and suppression_target:
+        _upsert_suppression(db, value=suppression_target, reason=event_type)
+        lead.status = "Suppressed"
+    elif event_type == "replied":
+        lead.status = "Replied"
+
+    db.add(
+        OutreachEvent(
+            lead_id=lead.id,
+            type=event_type,
+            payload={
+                "note": payload.note,
+                "email_or_domain": suppression_target if should_suppress else None,
+                "suppressed": bool(should_suppress and suppression_target),
+            },
+        )
+    )
+    db.commit()
+    return {"lead_id": str(lead_id), "status": "recorded", "event_type": event_type}
+
+
 @router.post("/mark-optout/{lead_id}")
 def mark_optout(
     lead_id: UUID,
@@ -167,9 +226,7 @@ def mark_optout(
     if not value:
         return {"lead_id": str(lead_id), "status": "missing_suppression_target"}
 
-    suppression = db.execute(select(Suppression).where(Suppression.email_or_domain == value)).scalar_one_or_none()
-    if suppression is None:
-        db.add(Suppression(email_or_domain=value, reason=payload.reason))
+    _upsert_suppression(db, value=value, reason=payload.reason)
     lead.status = "Suppressed"
     db.add(OutreachEvent(lead_id=lead.id, type="opt_out", payload={"reason": payload.reason, "value": value}))
     db.commit()
