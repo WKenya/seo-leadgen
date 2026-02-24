@@ -1,0 +1,207 @@
+from __future__ import annotations
+
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+import unittest
+from uuid import uuid4
+
+API_ROOT = Path(__file__).resolve().parents[1]
+if str(API_ROOT) not in sys.path:
+    sys.path.insert(0, str(API_ROOT))
+
+HAS_API_DEPS = True
+IMPORT_ERROR = ""
+try:
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine, select
+    from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+    from sqlalchemy.ext.compiler import compiles
+    from sqlalchemy.orm import Session, sessionmaker
+    from sqlalchemy.pool import StaticPool
+except Exception as exc:  # noqa: BLE001
+    HAS_API_DEPS = False
+    IMPORT_ERROR = str(exc)
+
+if HAS_API_DEPS:
+    @compiles(JSONB, "sqlite")
+    def _compile_jsonb_sqlite(type_, compiler, **kw):  # noqa: ANN001
+        return "JSON"
+
+    @compiles(PGUUID, "sqlite")
+    def _compile_uuid_sqlite(type_, compiler, **kw):  # noqa: ANN001
+        return "CHAR(36)"
+
+
+class AdminRouteTests(unittest.TestCase):
+    def setUp(self) -> None:
+        if not HAS_API_DEPS:
+            self.skipTest(f"api test deps missing: {IMPORT_ERROR}")
+
+        from app.db import get_db
+        from app.main import create_app
+        from app.models import Base
+        from app.settings import get_settings
+
+        self._get_db = get_db
+        self._get_settings = get_settings
+        self._env_backup = {
+            "DAILY_SEND_CAP": os.environ.get("DAILY_SEND_CAP"),
+            "WEBHOOK_SHARED_SECRET": os.environ.get("WEBHOOK_SHARED_SECRET"),
+            "WEBHOOK_SIGNATURE_SECRET": os.environ.get("WEBHOOK_SIGNATURE_SECRET"),
+            "WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": os.environ.get("WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"),
+        }
+        os.environ["DAILY_SEND_CAP"] = "5"
+        # Keep webhook auth envs stable; app imports all routers in create_app.
+        os.environ.setdefault("WEBHOOK_SHARED_SECRET", "test_shared_secret")
+        os.environ.setdefault("WEBHOOK_SIGNATURE_SECRET", "")
+        os.environ.setdefault("WEBHOOK_SIGNATURE_TOLERANCE_SECONDS", "300")
+        self._get_settings.cache_clear()
+
+        self.engine = create_engine(
+            "sqlite+pysqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(self.engine)
+        self.SessionLocal = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
+        self.db: Session = self.SessionLocal()
+
+        self.app = create_app()
+
+        def _override_get_db():
+            yield self.db
+
+        self.app.dependency_overrides[self._get_db] = _override_get_db
+        self.client = TestClient(self.app)
+
+    def tearDown(self) -> None:
+        if not HAS_API_DEPS:
+            return
+        self.client.close()
+        self.app.dependency_overrides.clear()
+        self.db.close()
+        self.engine.dispose()
+        for key, value in self._env_backup.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self._get_settings.cache_clear()
+
+    def _create_lead_with_draft(self, *, lead_email: str | None = "owner@acme.example"):
+        from app.models import Audit, EmailDraft, Lead
+
+        lead = Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            email=lead_email,
+            status="Draft Ready",
+        )
+        audit = Audit(id=uuid4(), lead_id=lead.id, final_url=lead.website_url)
+        draft = EmailDraft(
+            id=uuid4(),
+            lead_id=lead.id,
+            audit_id=audit.id,
+            subject="Quick website fixes",
+            body_text="Hi there",
+        )
+        self.db.add(lead)
+        self.db.add(audit)
+        self.db.add(draft)
+        self.db.commit()
+        return lead, audit, draft
+
+    def test_approve_draft_marks_approved_and_sets_lead_status(self) -> None:
+        from app.models import EmailDraft, Lead, OutreachEvent
+
+        lead, _, draft = self._create_lead_with_draft()
+        response = self.client.post(f"/admin/approve-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "approved")
+
+        refreshed_draft = self.db.get(EmailDraft, draft.id)
+        refreshed_lead = self.db.get(Lead, lead.id)
+        self.assertIsNotNone(refreshed_draft)
+        self.assertIsNotNone(refreshed_draft.approved_at)
+        self.assertEqual(refreshed_lead.status, "Approved to Send")
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "approved")
+
+    def test_approve_draft_blocked_when_suppressed(self) -> None:
+        from app.models import Lead, OutreachEvent, Suppression
+
+        lead, _, draft = self._create_lead_with_draft()
+        self.db.add(Suppression(email_or_domain="owner@acme.example", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/approve-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        refreshed_lead = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed_lead.status, "Suppressed")
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].type, "approved_blocked_suppressed")
+
+    def test_send_draft_requires_approval(self) -> None:
+        _, _, draft = self._create_lead_with_draft()
+        response = self.client.post(f"/admin/send-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "not_approved")
+
+    def test_send_draft_marks_sent_when_approved(self) -> None:
+        from app.models import EmailDraft, Lead, OutreachEvent
+
+        lead, _, draft = self._create_lead_with_draft()
+        self.client.post(f"/admin/approve-draft/{draft.id}")
+
+        response = self.client.post(f"/admin/send-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "sent_stubbed")
+
+        refreshed_draft = self.db.get(EmailDraft, draft.id)
+        refreshed_lead = self.db.get(Lead, lead.id)
+        self.assertIsNotNone(refreshed_draft.sent_at)
+        self.assertEqual(refreshed_lead.status, "Sent")
+        events = self.db.execute(select(OutreachEvent).order_by(OutreachEvent.created_at.asc())).scalars().all()
+        self.assertEqual(events[-1].type, "sent")
+        self.assertEqual((events[-1].payload or {}).get("mode"), "manual_stub")
+
+    def test_send_draft_enforces_daily_cap(self) -> None:
+        from app.models import EmailDraft, OutreachEvent
+        from app.settings import get_settings
+
+        lead, audit, draft = self._create_lead_with_draft()
+        self.client.post(f"/admin/approve-draft/{draft.id}")
+
+        os.environ["DAILY_SEND_CAP"] = "1"
+        get_settings.cache_clear()
+
+        sent_draft = EmailDraft(
+            id=uuid4(),
+            lead_id=lead.id,
+            audit_id=audit.id,
+            subject="Old send",
+            body_text="sent",
+            approved_at=datetime.now(timezone.utc),
+            sent_at=datetime.now(timezone.utc),
+        )
+        self.db.add(sent_draft)
+        self.db.commit()
+
+        response = self.client.post(f"/admin/send-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "daily_cap_reached")
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertTrue(any(event.type == "send_blocked_cap" for event in events))
+
+
+if __name__ == "__main__":
+    unittest.main()
