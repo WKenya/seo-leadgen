@@ -43,6 +43,7 @@ Local-only path (without containers; requires local Postgres/Redis):
 Health:
 - `GET /healthz`
 - `GET /readyz`
+- `GET /metrics/summary`
 
 Leads / audits / issues:
 - `GET /leads`
