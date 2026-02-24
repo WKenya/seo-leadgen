@@ -14,13 +14,23 @@ router = APIRouter(prefix="/leads", tags=["leads"])
 @router.get("")
 def list_leads(
     status: str | None = Query(default=None),
+    q: str | None = Query(default=None, description="name/domain substring"),
+    limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    stmt = select(Lead).order_by(Lead.created_at.desc()).limit(100)
+    stmt = select(Lead).order_by(Lead.created_at.desc()).limit(limit)
     if status:
         stmt = stmt.where(Lead.status == status)
+    if q:
+        like = f"%{q}%"
+        stmt = stmt.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)))
     leads = db.execute(stmt).scalars().all()
-    return {"items": [LeadRead.from_model(lead).model_dump() for lead in leads], "status_filter": status}
+    return {
+        "items": [LeadRead.from_model(lead).model_dump() for lead in leads],
+        "status_filter": status,
+        "q": q,
+        "limit": limit,
+    }
 
 
 @router.get("/{lead_id}")
@@ -32,16 +42,20 @@ def get_lead(lead_id: UUID, db: Session = Depends(get_db)) -> dict[str, object]:
 
 
 @router.get("/{lead_id}/audits")
-def list_lead_audits(lead_id: UUID, db: Session = Depends(get_db)) -> dict[str, object]:
+def list_lead_audits(
+    lead_id: UUID,
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
     audits = (
-        db.execute(select(Audit).where(Audit.lead_id == lead_id).order_by(Audit.started_at.desc()))
+        db.execute(select(Audit).where(Audit.lead_id == lead_id).order_by(Audit.started_at.desc()).limit(limit))
         .scalars()
         .all()
     )
-    return {"items": [AuditRead.from_model(audit).model_dump() for audit in audits]}
+    return {"items": [AuditRead.from_model(audit).model_dump() for audit in audits], "limit": limit}
 
 
 @router.get("/{lead_id}/pipeline")
