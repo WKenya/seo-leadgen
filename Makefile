@@ -16,6 +16,7 @@ endif
 
 UV ?= uv
 NPM ?= npm
+API_TEST_PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 HAS_COMPOSE := $(shell (command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1) && echo yes || echo no)
 
 .PHONY: help doctor require-compose require-compose-engine env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev check test
@@ -144,5 +145,5 @@ check:
 	python3 -m compileall services/api/app services/worker/app migrations
 
 test:
-	python3 -m unittest discover -s services/api/tests -p 'test_*.py' -v
+	$(API_TEST_PY) -m unittest discover -s services/api/tests -p 'test_*.py' -v
 	python3 -m unittest discover -s services/worker/tests -p 'test_*.py' -v
