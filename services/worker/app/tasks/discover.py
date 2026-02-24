@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.discovery.google_places import GooglePlacesClient
-from app.models import Lead
+from app.models import Lead, Suppression
 from app.settings import get_settings
 from app.worker import celery_app
 
@@ -28,6 +28,14 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
     return None
 
 
+def _suppression_values(session) -> set[str]:
+    return {
+        (row.email_or_domain or "").lower()
+        for row in session.execute(select(Suppression)).scalars()
+        if row.email_or_domain
+    }
+
+
 @celery_app.task(name="discover_leads")
 def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: int | None = None) -> dict[str, object]:
     settings = get_settings()
@@ -41,9 +49,13 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
     created = 0
     updated = 0
     skipped = 0
+    suppressed = 0
     notion_sync_lead_ids: list[str] = []
     with SessionLocal() as session:
+        suppression_values = _suppression_values(session)
         for item in discovered:
+            lead_domain = _domain(item.website_url)
+            is_suppressed = lead_domain in suppression_values
             lead = _find_existing_lead(
                 session,
                 place_id=item.place_id,
@@ -58,11 +70,13 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                     website_url=item.website_url,
                     address=item.address,
                     phone=item.phone,
-                    status="Discovered",
+                    status="Suppressed" if is_suppressed else "Discovered",
                 )
                 session.add(lead)
                 session.flush()
                 created += 1
+                if is_suppressed:
+                    suppressed += 1
                 notion_sync_lead_ids.append(str(lead.id))
                 continue
 
@@ -79,11 +93,17 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                 if value and getattr(lead, attr) != value:
                     setattr(lead, attr, value)
                     changed = True
+            desired_status = "Suppressed" if is_suppressed else lead.status
+            if desired_status != lead.status:
+                lead.status = desired_status
+                changed = True
             if changed:
                 updated += 1
                 notion_sync_lead_ids.append(str(lead.id))
             else:
                 skipped += 1
+            if is_suppressed:
+                suppressed += 1
 
         session.commit()
 
@@ -100,6 +120,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
         "created": created,
         "updated": updated,
         "unchanged": skipped,
+        "suppressed_matches": suppressed,
         "queued_notion_sync": len(notion_sync_lead_ids),
         "note": "text search implementation; radius currently informational",
     }
