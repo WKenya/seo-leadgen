@@ -5,7 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from app.drafts import extract_issue_proof, has_issue_proof
+from app.drafts import build_claims_used, extract_issue_proof, has_issue_proof, sanitize_claims_used
 from app.llm.openai_client import generate_draft_with_openai
 from app.llm.schemas import DraftOutput, QuickWin
 from app.models import Audit, EmailDraft, Issue, Lead, OutreachEvent, Suppression
@@ -122,7 +122,7 @@ def _build_fallback_draft(lead: Lead, audit: Audit, issues: list[Issue], setting
         f"evidence-backed issues (HTTPS/links/contactability). This is an MVP draft and should be reviewed "
         "before sending."
     )
-    claims_used = [{"issue_id": str(issue.id), "kind": issue.kind} for issue in top_issues]
+    claims_used = build_claims_used(top_issues, max_items=3)
     subject = f"Quick website fixes for {lead.name}"
 
     bullets = "\n".join(f"- {win.title}: {win.why_it_matters}" for win in quick_wins[:3])
@@ -182,6 +182,7 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
                     lead_name=lead.name,
                     audit_payload=_audit_payload_for_llm(lead, audit, issues, settings),
                 )
+                draft_output.claims_used = sanitize_claims_used(draft_output.claims_used, issues)
                 llm_mode = "openai"
             except Exception as exc:  # noqa: BLE001
                 llm_error = str(exc)
