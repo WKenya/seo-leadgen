@@ -105,6 +105,7 @@ def _verify_mailgun_webhook_signature(raw_body: bytes, *, content_type: str | No
             timestamp=timestamp,
             token=token,
             signature=signature,
+            tolerance_seconds=settings.mailgun_webhook_signature_tolerance_seconds,
         )
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc

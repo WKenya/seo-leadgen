@@ -79,6 +79,18 @@ class WebhookAuthTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid_mailgun_signature"):
             verify_mailgun_signature(signing_key="mg-key", timestamp="1700", token="abc", signature="bad")
 
+    def test_verify_mailgun_signature_rejects_stale_timestamp(self) -> None:
+        sig = compute_mailgun_signature(signing_key="mg-key", timestamp="1700000000", token="abc")
+        with self.assertRaisesRegex(ValueError, "stale_mailgun_signature_timestamp"):
+            verify_mailgun_signature(
+                signing_key="mg-key",
+                timestamp="1700000000",
+                token="abc",
+                signature=sig,
+                tolerance_seconds=30,
+                now=1700000100,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

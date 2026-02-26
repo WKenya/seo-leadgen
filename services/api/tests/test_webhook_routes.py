@@ -53,12 +53,14 @@ class WebhookRouteTests(unittest.TestCase):
             "WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": os.environ.get("WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"),
             "POSTMARK_WEBHOOK_TOKEN": os.environ.get("POSTMARK_WEBHOOK_TOKEN"),
             "MAILGUN_WEBHOOK_SIGNING_KEY": os.environ.get("MAILGUN_WEBHOOK_SIGNING_KEY"),
+            "MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": os.environ.get("MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"),
         }
         os.environ["WEBHOOK_SHARED_SECRET"] = "test_shared_secret"
         os.environ["WEBHOOK_SIGNATURE_SECRET"] = ""
         os.environ["WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"] = "300"
         os.environ["POSTMARK_WEBHOOK_TOKEN"] = ""
         os.environ["MAILGUN_WEBHOOK_SIGNING_KEY"] = ""
+        os.environ["MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"] = "300"
         self._get_settings.cache_clear()
 
         self.engine = create_engine(
@@ -326,12 +328,13 @@ class WebhookRouteTests(unittest.TestCase):
     def test_webhook_mailgun_signature_mode_accepts_valid_json_signature(self) -> None:
         from app.settings import get_settings
         from app.webhook_auth import compute_mailgun_signature
+        import time
 
         lead = self._create_lead(email="owner@acme.example")
         os.environ["MAILGUN_WEBHOOK_SIGNING_KEY"] = "mg-key"
         os.environ["WEBHOOK_SHARED_SECRET"] = ""
         get_settings.cache_clear()
-        timestamp = "1700000000"
+        timestamp = str(int(time.time()))
         token = "abc123"
         sig = compute_mailgun_signature(signing_key="mg-key", timestamp=timestamp, token=token)
         response = self.client.post(
@@ -346,6 +349,7 @@ class WebhookRouteTests(unittest.TestCase):
 
     def test_webhook_mailgun_signature_mode_rejects_invalid_signature(self) -> None:
         from app.settings import get_settings
+        import time
 
         self._create_lead(email="owner@acme.example")
         os.environ["MAILGUN_WEBHOOK_SIGNING_KEY"] = "mg-key"
@@ -354,12 +358,34 @@ class WebhookRouteTests(unittest.TestCase):
         response = self.client.post(
             "/webhooks/outreach-events",
             json={
-                "signature": {"timestamp": "1700000000", "token": "abc123", "signature": "bad"},
+                "signature": {"timestamp": str(int(time.time())), "token": "abc123", "signature": "bad"},
                 "event-data": {"id": "mg-auth-2", "event": "unsubscribed", "recipient": "owner@acme.example"},
             },
         )
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "invalid_mailgun_signature")
+
+    def test_webhook_mailgun_signature_mode_rejects_stale_timestamp(self) -> None:
+        from app.settings import get_settings
+        from app.webhook_auth import compute_mailgun_signature
+
+        self._create_lead(email="owner@acme.example")
+        os.environ["MAILGUN_WEBHOOK_SIGNING_KEY"] = "mg-key"
+        os.environ["MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"] = "1"
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+        timestamp = "1"
+        token = "abc123"
+        sig = compute_mailgun_signature(signing_key="mg-key", timestamp=timestamp, token=token)
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            json={
+                "signature": {"timestamp": timestamp, "token": token, "signature": sig},
+                "event-data": {"id": "mg-auth-3", "event": "unsubscribed", "recipient": "owner@acme.example"},
+            },
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "stale_mailgun_signature_timestamp")
 
     def test_webhook_token_mode_mailgun_unmapped_event_is_noop(self) -> None:
         response = self.client.post(

@@ -96,11 +96,17 @@ def verify_mailgun_signature(
     timestamp: str | None,
     token: str | None,
     signature: str | None,
+    tolerance_seconds: int | None = None,
+    now: int | None = None,
 ) -> None:
     if not signing_key:
         raise ValueError("mailgun_signing_key_not_configured")
     if not timestamp or not token or not signature:
         raise ValueError("missing_mailgun_signature_fields")
+    if tolerance_seconds is not None:
+        ts_value = parse_unix_timestamp(str(timestamp))
+        if not is_timestamp_fresh(ts_value, tolerance_seconds=tolerance_seconds, now=now):
+            raise ValueError("stale_mailgun_signature_timestamp")
     expected = compute_mailgun_signature(signing_key=signing_key, timestamp=str(timestamp), token=str(token))
     if not secrets.compare_digest(str(signature).strip().lower(), expected):
         raise ValueError("invalid_mailgun_signature")
