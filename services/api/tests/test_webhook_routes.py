@@ -285,6 +285,39 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 401)
         self.assertEqual(response.json()["detail"], "invalid_sendgrid_signature")
 
+    def test_webhook_sendgrid_signature_mode_rejects_stale_timestamp(self) -> None:
+        import base64
+
+        from app.settings import get_settings
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        self._create_lead(email="owner@acme.example")
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        public_key_pem = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("utf-8")
+        os.environ["SENDGRID_WEBHOOK_PUBLIC_KEY"] = public_key_pem
+        os.environ["SENDGRID_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"] = "1"
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+
+        payload = [{"email": "owner@acme.example", "event": "unsubscribe", "sg_event_id": "sg-auth-stale"}]
+        raw = json.dumps(payload).encode("utf-8")
+        timestamp = "1"
+        sig = private_key.sign(timestamp.encode("utf-8") + raw, ec.ECDSA(hashes.SHA256()))
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={
+                "X-Twilio-Email-Event-Webhook-Timestamp": timestamp,
+                "X-Twilio-Email-Event-Webhook-Signature": base64.b64encode(sig).decode("ascii"),
+            },
+            content=raw,
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "stale_sendgrid_signature_timestamp")
+
     def test_webhook_token_mode_sendgrid_unmapped_event_is_noop(self) -> None:
         response = self.client.post(
             "/webhooks/outreach-events",
