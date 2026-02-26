@@ -4,7 +4,9 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -267,6 +269,76 @@ class AdminRouteTests(unittest.TestCase):
         events = self.db.execute(select(OutreachEvent)).scalars().all()
         self.assertTrue(any(event.type == "opt_out" for event in events))
         self.assertTrue(any(event.type == "unsuppress" for event in events))
+
+    def test_run_discovery_batch_queues_nonblank_categories(self) -> None:
+        calls: list[tuple[str, dict[str, object] | None]] = []
+
+        def _fake_send_task(name: str, kwargs: dict[str, object] | None = None):
+            calls.append((name, kwargs))
+            return SimpleNamespace(id=f"task-{len(calls)}")
+
+        with patch("app.routes.admin.celery_client.send_task", side_effect=_fake_send_task):
+            response = self.client.post(
+                "/admin/run-discovery-batch",
+                json={
+                    "city": "Cleveland, OH",
+                    "categories": ["HVAC", " ", "Dentist"],
+                    "radius_meters": 10000,
+                    "limit": 7,
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["count"], 2)
+        self.assertEqual([item["category"] for item in body["items"]], ["HVAC", "Dentist"])
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all(name == "discover_leads" for name, _ in calls))
+        self.assertEqual(calls[0][1]["radius_meters"], 10000)
+        self.assertEqual(calls[0][1]["limit"], 7)
+
+    def test_run_audit_batch_filters_by_status(self) -> None:
+        from app.models import Lead
+
+        discovered = Lead(
+            id=uuid4(),
+            name="Disco",
+            category="HVAC",
+            source="google_places",
+            website_url="https://d.example",
+            status="Discovered",
+        )
+        suppressed = Lead(
+            id=uuid4(),
+            name="Supp",
+            category="HVAC",
+            source="google_places",
+            website_url="https://s.example",
+            status="Suppressed",
+        )
+        self.db.add(discovered)
+        self.db.add(suppressed)
+        self.db.commit()
+
+        calls: list[tuple[str, dict[str, object] | None]] = []
+
+        def _fake_send_task(name: str, kwargs: dict[str, object] | None = None):
+            calls.append((name, kwargs))
+            return SimpleNamespace(id=f"audit-{len(calls)}")
+
+        with patch("app.routes.admin.celery_client.send_task", side_effect=_fake_send_task):
+            response = self.client.post(
+                "/admin/run-audit-batch",
+                json={"statuses": ["Discovered"], "limit": 10},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0], "audit_lead")
+        self.assertEqual(calls[0][1]["lead_id"], str(discovered.id))
+        self.assertEqual(body["items"][0]["lead_id"], str(discovered.id))
 
 
 if __name__ == "__main__":
