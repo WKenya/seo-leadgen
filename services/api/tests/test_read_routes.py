@@ -1,0 +1,268 @@
+from __future__ import annotations
+
+import os
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+import unittest
+from uuid import uuid4
+
+API_ROOT = Path(__file__).resolve().parents[1]
+if str(API_ROOT) not in sys.path:
+    sys.path.insert(0, str(API_ROOT))
+
+HAS_API_DEPS = True
+IMPORT_ERROR = ""
+try:
+    from fastapi.testclient import TestClient
+    from sqlalchemy import create_engine
+    from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+    from sqlalchemy.ext.compiler import compiles
+    from sqlalchemy.orm import Session, sessionmaker
+    from sqlalchemy.pool import StaticPool
+except Exception as exc:  # noqa: BLE001
+    HAS_API_DEPS = False
+    IMPORT_ERROR = str(exc)
+
+if HAS_API_DEPS:
+    @compiles(JSONB, "sqlite")
+    def _compile_jsonb_sqlite(type_, compiler, **kw):  # noqa: ANN001
+        return "JSON"
+
+    @compiles(PGUUID, "sqlite")
+    def _compile_uuid_sqlite(type_, compiler, **kw):  # noqa: ANN001
+        return "CHAR(36)"
+
+
+class ReadRouteTests(unittest.TestCase):
+    def setUp(self) -> None:
+        if not HAS_API_DEPS:
+            self.skipTest(f"api test deps missing: {IMPORT_ERROR}")
+
+        from app.db import get_db
+        from app.main import create_app
+        from app.models import Base
+        from app.settings import get_settings
+
+        self._get_db = get_db
+        self._get_settings = get_settings
+        self._env_backup = {
+            "WEBHOOK_SHARED_SECRET": os.environ.get("WEBHOOK_SHARED_SECRET"),
+            "WEBHOOK_SIGNATURE_SECRET": os.environ.get("WEBHOOK_SIGNATURE_SECRET"),
+            "WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": os.environ.get("WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"),
+            "POSTMARK_WEBHOOK_TOKEN": os.environ.get("POSTMARK_WEBHOOK_TOKEN"),
+            "MAILGUN_WEBHOOK_SIGNING_KEY": os.environ.get("MAILGUN_WEBHOOK_SIGNING_KEY"),
+        }
+        os.environ.setdefault("WEBHOOK_SHARED_SECRET", "test_shared_secret")
+        os.environ.setdefault("WEBHOOK_SIGNATURE_SECRET", "")
+        os.environ.setdefault("WEBHOOK_SIGNATURE_TOLERANCE_SECONDS", "300")
+        os.environ.setdefault("POSTMARK_WEBHOOK_TOKEN", "")
+        os.environ.setdefault("MAILGUN_WEBHOOK_SIGNING_KEY", "")
+        self._get_settings.cache_clear()
+
+        self.engine = create_engine(
+            "sqlite+pysqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(self.engine)
+        self.SessionLocal = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
+        self.db: Session = self.SessionLocal()
+
+        self.app = create_app()
+
+        def _override_get_db():
+            yield self.db
+
+        self.app.dependency_overrides[self._get_db] = _override_get_db
+        self.client = TestClient(self.app)
+
+    def tearDown(self) -> None:
+        if not HAS_API_DEPS:
+            return
+        self.client.close()
+        self.app.dependency_overrides.clear()
+        self.db.close()
+        self.engine.dispose()
+        for key, value in self._env_backup.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        self._get_settings.cache_clear()
+
+    def _seed_lead_bundle(self):
+        from app.models import Audit, EmailDraft, Issue, Lead, OutreachEvent, Suppression
+
+        now = datetime.now(timezone.utc)
+        lead1 = Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            email="owner@acme.example",
+            status="Draft Ready",
+        )
+        lead2 = Lead(
+            id=uuid4(),
+            name="Bravo Dental",
+            category="Dentist",
+            source="google_places",
+            website_url="https://bravo.example",
+            email="info@bravo.example",
+            status="Suppressed",
+        )
+        audit = Audit(
+            id=uuid4(),
+            lead_id=lead1.id,
+            final_url=lead1.website_url,
+            started_at=now - timedelta(minutes=30),
+            finished_at=now - timedelta(minutes=20),
+        )
+        issue1 = Issue(
+            id=uuid4(),
+            audit_id=audit.id,
+            kind="seo",
+            severity=2,
+            title="Missing meta description",
+            details={"url": "https://acme.example"},
+        )
+        issue2 = Issue(
+            id=uuid4(),
+            audit_id=audit.id,
+            kind="broken_link",
+            severity=4,
+            title="Broken link: /pricing",
+            details={"url": "https://acme.example/pricing", "status": 404},
+        )
+        draft_old = EmailDraft(
+            id=uuid4(),
+            lead_id=lead1.id,
+            audit_id=audit.id,
+            subject="Old",
+            body_text="old",
+            created_at=now - timedelta(minutes=15),
+        )
+        draft_new = EmailDraft(
+            id=uuid4(),
+            lead_id=lead1.id,
+            audit_id=audit.id,
+            subject="New",
+            body_text="new",
+            created_at=now - timedelta(minutes=5),
+        )
+        event_old = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="approved",
+            payload={"draft_id": str(draft_old.id)},
+            created_at=now - timedelta(minutes=10),
+        )
+        event_new = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="sent",
+            payload={"draft_id": str(draft_new.id)},
+            created_at=now - timedelta(minutes=1),
+        )
+        event_other = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead2.id,
+            type="opt_out",
+            payload={},
+            created_at=now - timedelta(minutes=2),
+        )
+        suppression1 = Suppression(email_or_domain="owner@acme.example", reason="opt_out", created_at=now)
+        suppression2 = Suppression(email_or_domain="bravo.example", reason="bounce", created_at=now - timedelta(days=1))
+
+        self.db.add_all(
+            [
+                lead1,
+                lead2,
+                audit,
+                issue1,
+                issue2,
+                draft_old,
+                draft_new,
+                event_old,
+                event_new,
+                event_other,
+                suppression1,
+                suppression2,
+            ]
+        )
+        self.db.commit()
+        return {
+            "lead1": lead1,
+            "lead2": lead2,
+            "audit": audit,
+            "issues": [issue1, issue2],
+            "draft_old": draft_old,
+            "draft_new": draft_new,
+        }
+
+    def test_get_audit_and_list_issues_orders_by_severity_then_title(self) -> None:
+        seeded = self._seed_lead_bundle()
+        audit = seeded["audit"]
+
+        audit_resp = self.client.get(f"/audits/{audit.id}")
+        self.assertEqual(audit_resp.status_code, 200, audit_resp.text)
+        self.assertEqual(audit_resp.json()["id"], str(audit.id))
+
+        issues_resp = self.client.get(f"/audits/{audit.id}/issues")
+        self.assertEqual(issues_resp.status_code, 200, issues_resp.text)
+        items = issues_resp.json()["items"]
+        self.assertEqual(len(items), 2)
+        self.assertEqual([item["severity"] for item in items], [4, 2])
+
+    def test_get_audit_404_when_missing(self) -> None:
+        response = self.client.get(f"/audits/{uuid4()}")
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "audit not found")
+
+    def test_list_drafts_and_get_draft_support_filters(self) -> None:
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+        draft_new = seeded["draft_new"]
+
+        response = self.client.get("/drafts", params={"lead_id": str(lead1.id), "limit": 5})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["limit"], 5)
+        self.assertEqual(len(body["items"]), 2)
+        self.assertEqual(body["items"][0]["subject"], "New")
+
+        get_resp = self.client.get(f"/drafts/{draft_new.id}")
+        self.assertEqual(get_resp.status_code, 200, get_resp.text)
+        self.assertEqual(get_resp.json()["id"], str(draft_new.id))
+
+    def test_list_events_and_lead_events_filter_by_type(self) -> None:
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+
+        response = self.client.get("/events", params={"event_type": "sent", "limit": 10})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["limit"], 10)
+        self.assertEqual(len(body["items"]), 1)
+        self.assertEqual(body["items"][0]["type"], "sent")
+
+        lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"event_type": "approved", "limit": 10})
+        self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
+        lead_items = lead_resp.json()["items"]
+        self.assertEqual(len(lead_items), 1)
+        self.assertEqual(lead_items[0]["type"], "approved")
+
+    def test_list_suppression_supports_q_and_limit(self) -> None:
+        self._seed_lead_bundle()
+        response = self.client.get("/suppression", params={"q": "acme", "limit": 1})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["limit"], 1)
+        self.assertEqual(len(body["items"]), 1)
+        self.assertEqual(body["items"][0]["email_or_domain"], "owner@acme.example")
+
+
+if __name__ == "__main__":
+    unittest.main()
