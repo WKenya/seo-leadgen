@@ -74,6 +74,7 @@ Webhooks:
   - optional Mailgun native auth: `signature.timestamp/token/signature` via `MAILGUN_WEBHOOK_SIGNING_KEY` (+ replay window via `MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS`)
   - optional SendGrid native auth: `X-Twilio-Email-Event-Webhook-Signature` + `X-Twilio-Email-Event-Webhook-Timestamp` via `SENDGRID_WEBHOOK_PUBLIC_KEY`
   - accepts normalized payload (`{"events":[...]}`), SendGrid arrays, Postmark payloads, and Mailgun `event-data` payloads (JSON + form-encoded)
+  - provider-adapted events persist canonical provider metadata in `outreach_events.payload` (`provider`, provider event id/name/timestamp)
 
 Webhook setup examples (copy/paste)
 - Generic shared-token mode:

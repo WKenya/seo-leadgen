@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
@@ -23,6 +24,9 @@ class OutreachWebhookEvent(BaseModel):
     event_type: str  # replied|bounced|opt_out
     lead_id: UUID | None = None
     email_or_domain: str | None = None
+    provider: str | None = None
+    provider_event_name: str | None = None
+    provider_event_at: str | None = None
     payload: dict[str, object] | None = None
 
 
@@ -199,6 +203,22 @@ def _is_truthy(value: object) -> bool:
     return False
 
 
+def _coerce_event_time(value: object) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat()
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        try:
+            return datetime.fromtimestamp(float(raw), tz=timezone.utc).isoformat()
+        except ValueError:
+            return raw
+    return None
+
+
 def _normalize_sendgrid_events(raw_events: list[object]) -> list[OutreachWebhookEvent]:
     normalized: list[OutreachWebhookEvent] = []
     for item in raw_events:
@@ -214,6 +234,9 @@ def _normalize_sendgrid_events(raw_events: list[object]) -> list[OutreachWebhook
                 event_id=str(event_id).strip() if event_id else None,
                 event_type=event_type,
                 email_or_domain=str(email_value).strip().lower() if email_value else None,
+                provider="sendgrid",
+                provider_event_name=str(item.get("event") or "").strip() or None,
+                provider_event_at=_coerce_event_time(item.get("timestamp")),
                 payload=dict(item),
             )
         )
@@ -232,6 +255,14 @@ def _normalize_postmark_event(raw: dict[str, object]) -> OutreachWebhookRequest:
                 event_id=str(event_id).strip() if event_id else None,
                 event_type=event_type,
                 email_or_domain=str(email_value).strip().lower() if email_value else None,
+                provider="postmark",
+                provider_event_name=str(raw.get("RecordType") or "").strip() or None,
+                provider_event_at=(
+                    _coerce_event_time(raw.get("ReceivedAt"))
+                    or _coerce_event_time(raw.get("BouncedAt"))
+                    or _coerce_event_time(raw.get("InactiveAt"))
+                    or _coerce_event_time(raw.get("RecordedAt"))
+                ),
                 payload=dict(raw),
             )
         ]
@@ -250,6 +281,12 @@ def _normalize_mailgun_event(raw_event_data: dict[str, object]) -> OutreachWebho
                 event_id=str(event_id).strip() if event_id else None,
                 event_type=event_type,
                 email_or_domain=str(recipient).strip().lower() if recipient else None,
+                provider="mailgun",
+                provider_event_name=str(raw_event_data.get("event") or "").strip() or None,
+                provider_event_at=(
+                    _coerce_event_time(raw_event_data.get("timestamp"))
+                    or _coerce_event_time(raw_event_data.get("event_timestamp"))
+                ),
                 payload=dict(raw_event_data),
             )
         ]
@@ -395,6 +432,10 @@ async def ingest_outreach_events(
                 type=event_type,
                 payload={
                     "source": "webhook",
+                    "provider": item.provider,
+                    "provider_event_id": external_id if item.provider else None,
+                    "provider_event_name": item.provider_event_name,
+                    "provider_event_at": item.provider_event_at,
                     "email_or_domain": suppression_value or None,
                     "payload": item.payload,
                 },

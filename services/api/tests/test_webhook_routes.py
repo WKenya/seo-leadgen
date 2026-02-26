@@ -202,7 +202,7 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.json()["detail"], "stale_webhook_timestamp")
 
     def test_webhook_token_mode_accepts_sendgrid_array_payload_and_suppresses(self) -> None:
-        from app.models import Lead, Suppression
+        from app.models import Lead, OutreachEvent, Suppression
 
         lead = self._create_lead(email="owner@acme.example")
         response = self.client.post(
@@ -227,6 +227,13 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row.email_or_domain, "owner@acme.example")
         self.assertEqual(row.reason, "opt_out")
+        event = self.db.execute(select(OutreachEvent)).scalar_one_or_none()
+        self.assertIsNotNone(event)
+        payload = event.payload or {}
+        self.assertEqual(payload.get("provider"), "sendgrid")
+        self.assertEqual(payload.get("provider_event_id"), "sg-evt-1")
+        self.assertEqual(payload.get("provider_event_name"), "unsubscribe")
+        self.assertEqual(payload.get("provider_event_at"), "2023-11-14T22:13:20+00:00")
 
     def test_webhook_token_mode_accepts_sendgrid_dropped_event_as_bounced(self) -> None:
         from app.models import Lead, Suppression
@@ -593,7 +600,7 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(row.reason, "opt_out")
 
     def test_webhook_token_mode_accepts_mailgun_legacy_form_fields(self) -> None:
-        from app.models import Lead, Suppression
+        from app.models import Lead, OutreachEvent, Suppression
 
         lead = self._create_lead(email="owner@acme.example")
         response = self.client.post(
@@ -616,6 +623,13 @@ class WebhookRouteTests(unittest.TestCase):
         row = self.db.execute(select(Suppression)).scalar_one_or_none()
         self.assertIsNotNone(row)
         self.assertEqual(row.reason, "bounced")
+        event = self.db.execute(select(OutreachEvent)).scalar_one_or_none()
+        self.assertIsNotNone(event)
+        payload = event.payload or {}
+        self.assertEqual(payload.get("provider"), "mailgun")
+        self.assertEqual(payload.get("provider_event_id"), "mg-legacy-1")
+        self.assertEqual(payload.get("provider_event_name"), "failed")
+        self.assertIsNone(payload.get("provider_event_at"))
 
     def test_webhook_mailgun_signature_mode_accepts_form_encoded_top_level_signature_fields(self) -> None:
         import time
