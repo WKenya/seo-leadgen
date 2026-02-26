@@ -8,7 +8,13 @@ API_ROOT = Path(__file__).resolve().parents[1]
 if str(API_ROOT) not in sys.path:
     sys.path.insert(0, str(API_ROOT))
 
-from app.webhook_auth import compute_signature, parse_signature_header, verify_hmac_request  # noqa: E402
+from app.webhook_auth import (  # noqa: E402
+    compute_mailgun_signature,
+    compute_signature,
+    parse_signature_header,
+    verify_hmac_request,
+    verify_mailgun_signature,
+)
 
 
 class WebhookAuthTests(unittest.TestCase):
@@ -64,6 +70,14 @@ class WebhookAuthTests(unittest.TestCase):
                 tolerance_seconds=300,
                 now=1700000000,
             )
+
+    def test_verify_mailgun_signature_accepts_valid_values(self) -> None:
+        sig = compute_mailgun_signature(signing_key="mg-key", timestamp="1700", token="abc")
+        verify_mailgun_signature(signing_key="mg-key", timestamp="1700", token="abc", signature=sig)
+
+    def test_verify_mailgun_signature_rejects_invalid_signature(self) -> None:
+        with self.assertRaisesRegex(ValueError, "invalid_mailgun_signature"):
+            verify_mailgun_signature(signing_key="mg-key", timestamp="1700", token="abc", signature="bad")
 
 
 if __name__ == "__main__":

@@ -83,3 +83,24 @@ def verify_hmac_request(
     provided = normalize_signature(effective_signature)
     if not secrets.compare_digest(provided, expected):
         raise ValueError("invalid_webhook_signature")
+
+
+def compute_mailgun_signature(*, signing_key: str, timestamp: str, token: str) -> str:
+    payload = f"{timestamp}{token}".encode("utf-8")
+    return hmac.new(signing_key.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
+
+def verify_mailgun_signature(
+    *,
+    signing_key: str,
+    timestamp: str | None,
+    token: str | None,
+    signature: str | None,
+) -> None:
+    if not signing_key:
+        raise ValueError("mailgun_signing_key_not_configured")
+    if not timestamp or not token or not signature:
+        raise ValueError("missing_mailgun_signature_fields")
+    expected = compute_mailgun_signature(signing_key=signing_key, timestamp=str(timestamp), token=str(token))
+    if not secrets.compare_digest(str(signature).strip().lower(), expected):
+        raise ValueError("invalid_mailgun_signature")

@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     webhook_signature_secret: str = Field(default="", alias="WEBHOOK_SIGNATURE_SECRET")
     webhook_signature_tolerance_seconds: int = Field(default=300, alias="WEBHOOK_SIGNATURE_TOLERANCE_SECONDS")
     postmark_webhook_token: str = Field(default="", alias="POSTMARK_WEBHOOK_TOKEN")
+    mailgun_webhook_signing_key: str = Field(default="", alias="MAILGUN_WEBHOOK_SIGNING_KEY")
     daily_send_cap: int = Field(default=5, alias="DAILY_SEND_CAP")
 
 

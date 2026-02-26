@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Lead, OutreachEvent, Suppression
 from app.settings import get_settings
-from app.webhook_auth import verify_hmac_request
+from app.webhook_auth import verify_hmac_request, verify_mailgun_signature
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -61,6 +61,54 @@ def _verify_webhook_hmac(body: bytes, signature: str | None, timestamp_header: s
         )
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+
+def _extract_mailgun_signature_fields(raw_body: bytes, *, content_type: str | None) -> tuple[str, str, str] | None:
+    content_type_value = (content_type or "").split(";", 1)[0].strip().lower()
+    if content_type_value == "application/x-www-form-urlencoded":
+        parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+        ts = (parsed.get("signature[timestamp]") or [None])[0]
+        token = (parsed.get("signature[token]") or [None])[0]
+        sig = (parsed.get("signature[signature]") or [None])[0]
+        if ts or token or sig:
+            return (str(ts or ""), str(token or ""), str(sig or ""))
+        return None
+
+    try:
+        raw = json.loads(raw_body)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(raw, dict):
+        return None
+    signature = raw.get("signature")
+    if not isinstance(signature, dict):
+        return None
+    ts = signature.get("timestamp")
+    token = signature.get("token")
+    sig = signature.get("signature")
+    if ts is None and token is None and sig is None:
+        return None
+    return (str(ts or ""), str(token or ""), str(sig or ""))
+
+
+def _verify_mailgun_webhook_signature(raw_body: bytes, *, content_type: str | None) -> bool:
+    settings = get_settings()
+    if not settings.mailgun_webhook_signing_key:
+        return False
+    fields = _extract_mailgun_signature_fields(raw_body, content_type=content_type)
+    if fields is None:
+        return False
+    timestamp, token, signature = fields
+    try:
+        verify_mailgun_signature(
+            signing_key=settings.mailgun_webhook_signing_key,
+            timestamp=timestamp,
+            token=token,
+            signature=signature,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return True
 
 
 def _domain_from_url(url: str | None) -> str | None:
@@ -232,13 +280,16 @@ async def ingest_outreach_events(
 ) -> dict[str, object]:
     raw_body = await request.body()
     settings = get_settings()
+    content_type = request.headers.get("content-type")
     if settings.webhook_signature_secret:
         _verify_webhook_hmac(raw_body, x_webhook_signature, x_webhook_timestamp)
     elif settings.postmark_webhook_token and x_postmark_server_token is not None:
         _require_postmark_token(x_postmark_server_token)
+    elif _verify_mailgun_webhook_signature(raw_body, content_type=content_type):
+        pass
     else:
         _require_webhook_secret(x_webhook_token)
-    body = _parse_request_body(raw_body, content_type=request.headers.get("content-type"))
+    body = _parse_request_body(raw_body, content_type=content_type)
 
     processed = 0
     duplicates = 0

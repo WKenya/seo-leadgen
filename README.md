@@ -71,6 +71,7 @@ Webhooks:
   - supports optional per-event `event_id` for idempotent ingestion
   - HMAC payload format: `{unix_timestamp}.{raw_request_body}` (SHA-256 hex; `sha256=` prefix accepted)
   - optional Postmark native auth: `X-Postmark-Server-Token` via `POSTMARK_WEBHOOK_TOKEN`
+  - optional Mailgun native auth: `signature.timestamp/token/signature` via `MAILGUN_WEBHOOK_SIGNING_KEY`
   - accepts normalized payload (`{"events":[...]}`), SendGrid arrays, Postmark payloads, and Mailgun `event-data` payloads (JSON + form-encoded)
 
 Admin triggers / review controls:
