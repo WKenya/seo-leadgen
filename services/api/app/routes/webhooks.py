@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -165,7 +165,25 @@ def _normalize_mailgun_event(raw_event_data: dict[str, object]) -> OutreachWebho
     )
 
 
-def _parse_request_body(raw_body: bytes) -> OutreachWebhookRequest:
+def _parse_form_encoded_body(raw_body: bytes) -> OutreachWebhookRequest:
+    parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+    event_data_values = parsed.get("event-data") or parsed.get("event_data")
+    if not event_data_values:
+        raise HTTPException(status_code=400, detail="invalid_body: missing event-data form field")
+    event_data_raw = event_data_values[0]
+    try:
+        event_data = json.loads(event_data_raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
+    if not isinstance(event_data, dict):
+        raise HTTPException(status_code=400, detail="invalid_body: event-data must be object")
+    return _normalize_mailgun_event(event_data)
+
+
+def _parse_request_body(raw_body: bytes, *, content_type: str | None = None) -> OutreachWebhookRequest:
+    content_type_value = (content_type or "").split(";", 1)[0].strip().lower()
+    if content_type_value == "application/x-www-form-urlencoded":
+        return _parse_form_encoded_body(raw_body)
     try:
         raw = json.loads(raw_body)
     except json.JSONDecodeError as exc:
@@ -209,7 +227,7 @@ async def ingest_outreach_events(
         _verify_webhook_hmac(raw_body, x_webhook_signature, x_webhook_timestamp)
     else:
         _require_webhook_secret(x_webhook_token)
-    body = _parse_request_body(raw_body)
+    body = _parse_request_body(raw_body, content_type=request.headers.get("content-type"))
 
     processed = 0
     duplicates = 0
