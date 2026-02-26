@@ -75,6 +75,29 @@ Webhooks:
   - optional SendGrid native auth: `X-Twilio-Email-Event-Webhook-Signature` + `X-Twilio-Email-Event-Webhook-Timestamp` via `SENDGRID_WEBHOOK_PUBLIC_KEY`
   - accepts normalized payload (`{"events":[...]}`), SendGrid arrays, Postmark payloads, and Mailgun `event-data` payloads (JSON + form-encoded)
 
+Webhook setup examples (copy/paste)
+- Generic shared-token mode:
+  - set `WEBHOOK_SHARED_SECRET=...`
+  - `curl -X POST http://localhost:8080/webhooks/outreach-events -H 'X-Webhook-Token: ...' -H 'Content-Type: application/json' -d '{"events":[{"event_type":"replied","email_or_domain":"owner@example.com","event_id":"evt-1"}]}'`
+- Postmark native token mode:
+  - set `POSTMARK_WEBHOOK_TOKEN=...` (and leave `WEBHOOK_SHARED_SECRET` empty if you want Postmark-only auth)
+  - Postmark sends `X-Postmark-Server-Token`
+  - payload example: `{"RecordType":"Bounce","MessageID":"pm-1","Email":"owner@example.com"}`
+- Mailgun native signature mode:
+  - set `MAILGUN_WEBHOOK_SIGNING_KEY=...`
+  - JSON payload shape supported:
+    - `{"signature":{"timestamp":"...","token":"...","signature":"..."},"event-data":{"id":"mg-1","event":"unsubscribed","recipient":"owner@example.com"}}`
+  - form payload shape supported:
+    - content type `application/x-www-form-urlencoded`
+    - `event-data=<json>` plus `signature[timestamp]`, `signature[token]`, `signature[signature]`
+- SendGrid native signature mode:
+  - set `SENDGRID_WEBHOOK_PUBLIC_KEY=<PEM public key>`
+  - SendGrid sends:
+    - `X-Twilio-Email-Event-Webhook-Timestamp`
+    - `X-Twilio-Email-Event-Webhook-Signature`
+  - payload example (array):
+    - `[{"email":"owner@example.com","event":"unsubscribe","sg_event_id":"sg-1"}]`
+
 Admin triggers / review controls:
 - `POST /admin/run-discovery`
 - `POST /admin/run-discovery-batch`
