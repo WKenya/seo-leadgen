@@ -120,6 +120,13 @@ class MetricsRouteTests(unittest.TestCase):
             created_at=now,
             payload={"provider": "sendgrid", "provider_event_id": "sg-1"},
         )
+        event1b = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="bounced",
+            created_at=now,
+            payload={"provider": "sendgrid", "provider_event_id": "sg-2"},
+        )
         event2 = OutreachEvent(
             id=uuid4(),
             lead_id=lead2.id,
@@ -128,7 +135,7 @@ class MetricsRouteTests(unittest.TestCase):
             payload={"provider": "mailgun", "provider_event_id": "mg-1"},
         )
 
-        self.db.add_all([lead1, lead2, audit1, audit2, draft1, draft2, event1, event2])
+        self.db.add_all([lead1, lead2, audit1, audit2, draft1, draft2, event1, event1b, event2])
         self.db.commit()
 
         response = self.client.get("/metrics/summary")
@@ -141,8 +148,9 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["drafts_total"], 2)
         self.assertEqual(body["drafts_approved"], 1)
         self.assertEqual(body["drafts_sent_today"], 1)
-        self.assertEqual(body["events_today"], 1)
-        self.assertEqual(body["webhook_events_by_provider_today"], {"sendgrid": 1})
+        self.assertEqual(body["events_today"], 2)
+        self.assertEqual(body["webhook_events_by_provider_today"], {"sendgrid": 2})
+        self.assertEqual(body["webhook_event_types_by_provider_today"], {"sendgrid": {"bounced": 1, "sent": 1}})
         self.assertIn("sent", body["latest_event_types"])
         self.assertIn("opt_out", body["latest_event_types"])
 

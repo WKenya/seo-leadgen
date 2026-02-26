@@ -41,11 +41,14 @@ def metrics_summary(db: Session = Depends(get_db)) -> dict[str, object]:
         .all()
     )
     webhook_events_by_provider_today: dict[str, int] = {}
+    webhook_event_types_by_provider_today: dict[str, dict[str, int]] = {}
     for event in event_rows_today:
         provider = str((event.payload or {}).get("provider") or "").strip().lower()
         if not provider:
             continue
         webhook_events_by_provider_today[provider] = webhook_events_by_provider_today.get(provider, 0) + 1
+        provider_types = webhook_event_types_by_provider_today.setdefault(provider, {})
+        provider_types[event.type] = provider_types.get(event.type, 0) + 1
 
     latest_events = (
         db.execute(select(OutreachEvent.type).order_by(OutreachEvent.created_at.desc()).limit(10)).scalars().all()
@@ -58,5 +61,6 @@ def metrics_summary(db: Session = Depends(get_db)) -> dict[str, object]:
         "drafts_sent_today": drafts_sent_today,
         "events_today": events_today,
         "webhook_events_by_provider_today": webhook_events_by_provider_today,
+        "webhook_event_types_by_provider_today": webhook_event_types_by_provider_today,
         "latest_event_types": list(latest_events),
     }
