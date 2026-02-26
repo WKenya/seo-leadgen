@@ -156,21 +156,21 @@ class ReadRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead1.id,
             type="approved",
-            payload={"draft_id": str(draft_old.id)},
+            payload={"draft_id": str(draft_old.id), "provider": "sendgrid", "provider_event_id": "sg-1"},
             created_at=now - timedelta(minutes=10),
         )
         event_new = OutreachEvent(
             id=uuid4(),
             lead_id=lead1.id,
             type="sent",
-            payload={"draft_id": str(draft_new.id)},
+            payload={"draft_id": str(draft_new.id), "provider": "mailgun", "provider_event_id": "mg-1"},
             created_at=now - timedelta(minutes=1),
         )
         event_other = OutreachEvent(
             id=uuid4(),
             lead_id=lead2.id,
             type="opt_out",
-            payload={},
+            payload={"provider": "postmark", "provider_event_id": "pm-1"},
             created_at=now - timedelta(minutes=2),
         )
         suppression1 = Suppression(email_or_domain="owner@acme.example", reason="opt_out", created_at=now)
@@ -253,6 +253,24 @@ class ReadRouteTests(unittest.TestCase):
         lead_items = lead_resp.json()["items"]
         self.assertEqual(len(lead_items), 1)
         self.assertEqual(lead_items[0]["type"], "approved")
+
+    def test_list_events_and_lead_events_filter_by_provider(self) -> None:
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+
+        response = self.client.get("/events", params={"provider": "postmark", "limit": 10})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["limit"], 10)
+        self.assertEqual(len(body["items"]), 1)
+        self.assertEqual(body["items"][0]["payload"]["provider"], "postmark")
+
+        lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"provider": "mailgun", "limit": 10})
+        self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
+        lead_items = lead_resp.json()["items"]
+        self.assertEqual(len(lead_items), 1)
+        self.assertEqual(lead_items[0]["type"], "sent")
+        self.assertEqual(lead_items[0]["payload"]["provider"], "mailgun")
 
     def test_list_suppression_supports_q_and_limit(self) -> None:
         self._seed_lead_bundle()

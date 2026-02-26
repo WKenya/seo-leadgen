@@ -54,11 +54,11 @@ Leads / audits / issues:
 - `GET /audits/{audit_id}/issues`
 
 Drafts / events:
-- `GET /events`
+- `GET /events` (`event_type`, `provider`, `limit`)
 - `GET /drafts`
 - `GET /drafts/{draft_id}`
 - `GET /leads/{lead_id}/drafts`
-- `GET /leads/{lead_id}/events`
+- `GET /leads/{lead_id}/events` (`event_type`, `provider`, `limit`)
 
 Suppression:
 - `GET /suppression`

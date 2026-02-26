@@ -14,13 +14,18 @@ router = APIRouter(tags=["drafts"])
 @router.get("/events")
 def list_events(
     event_type: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    stmt = select(OutreachEvent).order_by(OutreachEvent.created_at.desc()).limit(limit)
+    stmt = select(OutreachEvent).order_by(OutreachEvent.created_at.desc())
     if event_type:
         stmt = stmt.where(OutreachEvent.type == event_type)
     events = db.execute(stmt).scalars().all()
+    if provider:
+        provider_value = provider.strip().lower()
+        events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
+    events = events[:limit]
     return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit}
 
 
@@ -68,16 +73,19 @@ def list_lead_drafts(
 def list_lead_events(
     lead_id: UUID,
     event_type: str | None = Query(default=None),
+    provider: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
-    stmt = select(OutreachEvent).where(OutreachEvent.lead_id == lead_id).order_by(OutreachEvent.created_at.desc()).limit(
-        limit
-    )
+    stmt = select(OutreachEvent).where(OutreachEvent.lead_id == lead_id).order_by(OutreachEvent.created_at.desc())
     if event_type:
         stmt = stmt.where(OutreachEvent.type == event_type)
     events = db.execute(stmt).scalars().all()
+    if provider:
+        provider_value = provider.strip().lower()
+        events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
+    events = events[:limit]
     return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit}
