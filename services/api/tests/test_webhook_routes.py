@@ -558,6 +558,31 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row.reason, "opt_out")
 
+    def test_webhook_token_mode_accepts_mailgun_legacy_form_fields(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            data={
+                "event": "failed",
+                "recipient": "owner@acme.example",
+                "event-id": "mg-legacy-1",
+                "severity": "permanent",
+                "signature[token]": "x",
+                "signature[timestamp]": "1700000000",
+                "signature[signature]": "ignored",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.reason, "bounced")
+
     def test_webhook_mailgun_signature_mode_accepts_form_encoded_top_level_signature_fields(self) -> None:
         import time
 
@@ -587,6 +612,40 @@ class WebhookRouteTests(unittest.TestCase):
                         "recipient": "owner@acme.example",
                     }
                 ),
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.reason, "opt_out")
+
+    def test_webhook_mailgun_signature_mode_accepts_legacy_form_fields(self) -> None:
+        import time
+
+        from app.models import Lead, Suppression
+        from app.settings import get_settings
+        from app.webhook_auth import compute_mailgun_signature
+
+        lead = self._create_lead(email="owner@acme.example")
+        os.environ["MAILGUN_WEBHOOK_SIGNING_KEY"] = "mg-key"
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+
+        timestamp = str(int(time.time()))
+        token = "legacy-form-token"
+        signature = compute_mailgun_signature(signing_key="mg-key", timestamp=timestamp, token=token)
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            data={
+                "timestamp": timestamp,
+                "token": token,
+                "signature": signature,
+                "event": "complained",
+                "recipient": "owner@acme.example",
+                "event-id": "mg-legacy-auth-1",
             },
         )
         self.assertEqual(response.status_code, 200, response.text)

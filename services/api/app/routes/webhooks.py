@@ -258,6 +258,23 @@ def _normalize_mailgun_event(raw_event_data: dict[str, object]) -> OutreachWebho
 
 def _parse_form_encoded_body(raw_body: bytes) -> OutreachWebhookRequest:
     parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+    if not (parsed.get("event-data") or parsed.get("event_data")):
+        if parsed.get("event"):
+            legacy_event: dict[str, object] = {}
+            for key, values in parsed.items():
+                if not values:
+                    continue
+                legacy_event[key] = values[0]
+            if "recipient" in legacy_event and "event" in legacy_event:
+                if "id" not in legacy_event:
+                    legacy_event["id"] = (
+                        legacy_event.get("event-id")
+                        or legacy_event.get("event_id")
+                        or legacy_event.get("Message-Id")
+                        or legacy_event.get("message-id")
+                    )
+                return _normalize_mailgun_event(legacy_event)
+
     event_data_values = parsed.get("event-data") or parsed.get("event_data")
     if not event_data_values:
         raise HTTPException(status_code=400, detail="invalid_body: missing event-data form field")

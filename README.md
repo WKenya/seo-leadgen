@@ -88,6 +88,7 @@ Webhook setup examples (copy/paste)
   - JSON payload shape supported:
     - `{"signature":{"timestamp":"...","token":"...","signature":"..."},"event-data":{"id":"mg-1","event":"unsubscribed","recipient":"owner@example.com"}}`
   - form payload shape supported:
+    - legacy top-level Mailgun fields (`event`, `recipient`, optional `event-id`) are accepted
     - content type `application/x-www-form-urlencoded`
     - `event-data=<json>` plus either:
       - `signature[timestamp]`, `signature[token]`, `signature[signature]`
