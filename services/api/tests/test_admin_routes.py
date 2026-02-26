@@ -340,6 +340,59 @@ class AdminRouteTests(unittest.TestCase):
         self.assertEqual(calls[0][1]["lead_id"], str(discovered.id))
         self.assertEqual(body["items"][0]["lead_id"], str(discovered.id))
 
+    def test_other_admin_queue_endpoints_enqueue_expected_tasks(self) -> None:
+        calls: list[tuple[str, dict[str, object] | None]] = []
+
+        def _fake_send_task(name: str, kwargs: dict[str, object] | None = None):
+            calls.append((name, kwargs))
+            return SimpleNamespace(id=f"task-{len(calls)}")
+
+        with patch("app.routes.admin.celery_client.send_task", side_effect=_fake_send_task):
+            discovery = self.client.post(
+                "/admin/run-discovery",
+                params={
+                    "city": "Akron, OH",
+                    "category": "Plumber",
+                    "radius_meters": 5000,
+                    "limit": 3,
+                },
+            )
+            self.assertEqual(discovery.status_code, 200, discovery.text)
+            self.assertEqual(discovery.json()["status"], "queued")
+
+            run_audit = self.client.post("/admin/run-audit/lead-123")
+            self.assertEqual(run_audit.status_code, 200, run_audit.text)
+            self.assertEqual(run_audit.json()["lead_id"], "lead-123")
+
+            summarize = self.client.post("/admin/run-summarize/lead-123/audit-456")
+            self.assertEqual(summarize.status_code, 200, summarize.text)
+            self.assertEqual(summarize.json()["audit_id"], "audit-456")
+
+            notion_sync = self.client.post(
+                "/admin/run-notion-sync/lead-123",
+                params={"audit_id": "audit-456", "draft_id": "draft-789"},
+            )
+            self.assertEqual(notion_sync.status_code, 200, notion_sync.text)
+            self.assertEqual(notion_sync.json()["lead_id"], "lead-123")
+
+            gmail = self.client.post("/admin/create-gmail-draft/draft-789")
+            self.assertEqual(gmail.status_code, 200, gmail.text)
+            self.assertEqual(gmail.json()["draft_id"], "draft-789")
+
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "discover_leads",
+                    {"city": "Akron, OH", "category": "Plumber", "radius_meters": 5000, "limit": 3},
+                ),
+                ("audit_lead", {"lead_id": "lead-123"}),
+                ("summarize_and_draft", {"lead_id": "lead-123", "audit_id": "audit-456"}),
+                ("sync_notion", {"lead_id": "lead-123", "audit_id": "audit-456", "draft_id": "draft-789"}),
+                ("create_gmail_draft", {"draft_id": "draft-789"}),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
