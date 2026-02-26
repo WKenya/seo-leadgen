@@ -51,10 +51,12 @@ class WebhookRouteTests(unittest.TestCase):
             "WEBHOOK_SHARED_SECRET": os.environ.get("WEBHOOK_SHARED_SECRET"),
             "WEBHOOK_SIGNATURE_SECRET": os.environ.get("WEBHOOK_SIGNATURE_SECRET"),
             "WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": os.environ.get("WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"),
+            "POSTMARK_WEBHOOK_TOKEN": os.environ.get("POSTMARK_WEBHOOK_TOKEN"),
         }
         os.environ["WEBHOOK_SHARED_SECRET"] = "test_shared_secret"
         os.environ["WEBHOOK_SIGNATURE_SECRET"] = ""
         os.environ["WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"] = "300"
+        os.environ["POSTMARK_WEBHOOK_TOKEN"] = ""
         self._get_settings.cache_clear()
 
         self.engine = create_engine(
@@ -251,6 +253,38 @@ class WebhookRouteTests(unittest.TestCase):
         row = self.db.execute(select(Suppression)).scalar_one_or_none()
         self.assertIsNotNone(row)
         self.assertEqual(row.reason, "bounced")
+
+    def test_webhook_postmark_token_mode_accepts_valid_header(self) -> None:
+        from app.settings import get_settings
+
+        lead = self._create_lead(email="owner@acme.example")
+        os.environ["POSTMARK_WEBHOOK_TOKEN"] = "pm-secret"
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Postmark-Server-Token": "pm-secret"},
+            json={"RecordType": "Bounce", "MessageID": "pm-auth-1", "Email": str(lead.email)},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+    def test_webhook_postmark_token_mode_rejects_invalid_header(self) -> None:
+        from app.settings import get_settings
+
+        self._create_lead(email="owner@acme.example")
+        os.environ["POSTMARK_WEBHOOK_TOKEN"] = "pm-secret"
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Postmark-Server-Token": "wrong"},
+            json={"RecordType": "Bounce", "MessageID": "pm-auth-2", "Email": "owner@acme.example"},
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "invalid_postmark_webhook_token")
 
     def test_webhook_token_mode_postmark_unmapped_event_is_noop(self) -> None:
         response = self.client.post(

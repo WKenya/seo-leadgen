@@ -38,6 +38,14 @@ def _require_webhook_secret(token: str | None) -> None:
         raise HTTPException(status_code=401, detail="invalid_webhook_token")
 
 
+def _require_postmark_token(token: str | None) -> None:
+    settings = get_settings()
+    if not settings.postmark_webhook_token:
+        raise HTTPException(status_code=503, detail="postmark_webhook_token_not_configured")
+    if not token or not secrets.compare_digest(token, settings.postmark_webhook_token):
+        raise HTTPException(status_code=401, detail="invalid_postmark_webhook_token")
+
+
 def _verify_webhook_hmac(body: bytes, signature: str | None, timestamp_header: str | None) -> None:
     settings = get_settings()
     secret = settings.webhook_signature_secret
@@ -219,12 +227,15 @@ async def ingest_outreach_events(
     x_webhook_token: str | None = Header(default=None),
     x_webhook_signature: str | None = Header(default=None),
     x_webhook_timestamp: str | None = Header(default=None),
+    x_postmark_server_token: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     raw_body = await request.body()
     settings = get_settings()
     if settings.webhook_signature_secret:
         _verify_webhook_hmac(raw_body, x_webhook_signature, x_webhook_timestamp)
+    elif settings.postmark_webhook_token and x_postmark_server_token is not None:
+        _require_postmark_token(x_postmark_server_token)
     else:
         _require_webhook_secret(x_webhook_token)
     body = _parse_request_body(raw_body, content_type=request.headers.get("content-type"))
