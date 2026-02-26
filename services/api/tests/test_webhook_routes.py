@@ -571,6 +571,43 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 0)
         self.assertEqual(body["duplicates"], 0)
 
+    def test_webhook_token_mode_mailgun_failed_temporary_is_noop(self) -> None:
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "event-data": {
+                    "id": "mg-fail-temp-1",
+                    "event": "failed",
+                    "severity": "temporary",
+                    "recipient": "owner@acme.example",
+                }
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["duplicates"], 0)
+
+    def test_webhook_token_mode_mailgun_legacy_failed_temporary_is_noop(self) -> None:
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            data={
+                "event": "failed",
+                "severity": "temporary",
+                "recipient": "owner@acme.example",
+                "event-id": "mg-legacy-temp-1",
+                "signature[token]": "x",
+                "signature[timestamp]": "1700000000",
+                "signature[signature]": "ignored",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["duplicates"], 0)
+
     def test_webhook_token_mode_accepts_mailgun_form_encoded_event_data(self) -> None:
         from app.models import Lead, Suppression
 

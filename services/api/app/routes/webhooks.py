@@ -184,9 +184,14 @@ def _map_postmark_event_type(record_type: object, payload: dict[str, object]) ->
     return None
 
 
-def _map_mailgun_event_type(value: object) -> str | None:
+def _map_mailgun_event_type(value: object, payload: dict[str, object] | None = None) -> str | None:
     name = str(value or "").strip().lower()
-    if name in {"failed", "bounced"}:
+    if name == "failed":
+        severity = str((payload or {}).get("severity") or "").strip().lower()
+        if severity in {"temporary", "temp"}:
+            return None
+        return "bounced"
+    if name == "bounced":
         return "bounced"
     if name in {"unsubscribed", "complained"}:
         return "opt_out"
@@ -270,7 +275,7 @@ def _normalize_postmark_event(raw: dict[str, object]) -> OutreachWebhookRequest:
 
 
 def _normalize_mailgun_event(raw_event_data: dict[str, object]) -> OutreachWebhookRequest:
-    event_type = _map_mailgun_event_type(raw_event_data.get("event"))
+    event_type = _map_mailgun_event_type(raw_event_data.get("event"), raw_event_data)
     if not event_type:
         return OutreachWebhookRequest(events=[])
     event_id = raw_event_data.get("id")
