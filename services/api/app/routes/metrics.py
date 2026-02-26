@@ -35,6 +35,17 @@ def metrics_summary(db: Session = Depends(get_db)) -> dict[str, object]:
             select(func.count()).select_from(OutreachEvent).where(OutreachEvent.created_at >= start, OutreachEvent.created_at < end)
         ).scalar_one()
     )
+    event_rows_today = (
+        db.execute(select(OutreachEvent).where(OutreachEvent.created_at >= start, OutreachEvent.created_at < end))
+        .scalars()
+        .all()
+    )
+    webhook_events_by_provider_today: dict[str, int] = {}
+    for event in event_rows_today:
+        provider = str((event.payload or {}).get("provider") or "").strip().lower()
+        if not provider:
+            continue
+        webhook_events_by_provider_today[provider] = webhook_events_by_provider_today.get(provider, 0) + 1
 
     latest_events = (
         db.execute(select(OutreachEvent.type).order_by(OutreachEvent.created_at.desc()).limit(10)).scalars().all()
@@ -46,6 +57,6 @@ def metrics_summary(db: Session = Depends(get_db)) -> dict[str, object]:
         "drafts_approved": drafts_approved,
         "drafts_sent_today": drafts_sent_today,
         "events_today": events_today,
+        "webhook_events_by_provider_today": webhook_events_by_provider_today,
         "latest_event_types": list(latest_events),
     }
-
