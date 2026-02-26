@@ -54,6 +54,8 @@ class WebhookRouteTests(unittest.TestCase):
             "POSTMARK_WEBHOOK_TOKEN": os.environ.get("POSTMARK_WEBHOOK_TOKEN"),
             "MAILGUN_WEBHOOK_SIGNING_KEY": os.environ.get("MAILGUN_WEBHOOK_SIGNING_KEY"),
             "MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": os.environ.get("MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"),
+            "SENDGRID_WEBHOOK_PUBLIC_KEY": os.environ.get("SENDGRID_WEBHOOK_PUBLIC_KEY"),
+            "SENDGRID_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS": os.environ.get("SENDGRID_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"),
         }
         os.environ["WEBHOOK_SHARED_SECRET"] = "test_shared_secret"
         os.environ["WEBHOOK_SIGNATURE_SECRET"] = ""
@@ -61,6 +63,8 @@ class WebhookRouteTests(unittest.TestCase):
         os.environ["POSTMARK_WEBHOOK_TOKEN"] = ""
         os.environ["MAILGUN_WEBHOOK_SIGNING_KEY"] = ""
         os.environ["MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"] = "300"
+        os.environ["SENDGRID_WEBHOOK_PUBLIC_KEY"] = ""
+        os.environ["SENDGRID_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS"] = "300"
         self._get_settings.cache_clear()
 
         self.engine = create_engine(
@@ -223,6 +227,63 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row.email_or_domain, "owner@acme.example")
         self.assertEqual(row.reason, "opt_out")
+
+    def test_webhook_sendgrid_signature_mode_accepts_valid_headers(self) -> None:
+        import base64
+
+        from app.settings import get_settings
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        lead = self._create_lead(email="owner@acme.example")
+        private_key = ec.generate_private_key(ec.SECP256R1())
+        public_key_pem = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("utf-8")
+        os.environ["SENDGRID_WEBHOOK_PUBLIC_KEY"] = public_key_pem
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+
+        payload = [{"email": str(lead.email), "event": "unsubscribe", "sg_event_id": "sg-auth-1"}]
+        raw = json.dumps(payload).encode("utf-8")
+        timestamp = str(int(time.time()))
+        sig = private_key.sign(timestamp.encode("utf-8") + raw, ec.ECDSA(hashes.SHA256()))
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={
+                "X-Twilio-Email-Event-Webhook-Timestamp": timestamp,
+                "X-Twilio-Email-Event-Webhook-Signature": base64.b64encode(sig).decode("ascii"),
+            },
+            content=raw,
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+    def test_webhook_sendgrid_signature_mode_rejects_invalid_signature(self) -> None:
+        from app.settings import get_settings
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        self._create_lead(email="owner@acme.example")
+        public_key_pem = ec.generate_private_key(ec.SECP256R1()).public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        ).decode("utf-8")
+        os.environ["SENDGRID_WEBHOOK_PUBLIC_KEY"] = public_key_pem
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={
+                "X-Twilio-Email-Event-Webhook-Timestamp": str(int(time.time())),
+                "X-Twilio-Email-Event-Webhook-Signature": "bad",
+            },
+            json=[],
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.json()["detail"], "invalid_sendgrid_signature")
 
     def test_webhook_token_mode_sendgrid_unmapped_event_is_noop(self) -> None:
         response = self.client.post(

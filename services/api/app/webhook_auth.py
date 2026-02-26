@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import secrets
@@ -110,3 +111,57 @@ def verify_mailgun_signature(
     expected = compute_mailgun_signature(signing_key=signing_key, timestamp=str(timestamp), token=str(token))
     if not secrets.compare_digest(str(signature).strip().lower(), expected):
         raise ValueError("invalid_mailgun_signature")
+
+
+def _load_sendgrid_public_key(public_key: str):
+    from cryptography.hazmat.primitives import serialization
+
+    raw = public_key.strip()
+    if not raw:
+        raise ValueError("sendgrid_webhook_public_key_not_configured")
+    key_bytes = raw.encode("utf-8")
+    try:
+        return serialization.load_pem_public_key(key_bytes)
+    except Exception:  # noqa: BLE001
+        try:
+            der_bytes = base64.b64decode(raw)
+            return serialization.load_der_public_key(der_bytes)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError("invalid_sendgrid_public_key") from exc
+
+
+def verify_sendgrid_signature(
+    *,
+    public_key: str,
+    payload: bytes,
+    signature_b64: str | None,
+    timestamp: str | None,
+    tolerance_seconds: int | None = None,
+    now: int | None = None,
+) -> None:
+    if not public_key.strip():
+        raise ValueError("sendgrid_webhook_public_key_not_configured")
+    if not signature_b64 or not timestamp:
+        raise ValueError("missing_sendgrid_signature_fields")
+    if tolerance_seconds is not None:
+        ts_value = parse_unix_timestamp(str(timestamp))
+        if not is_timestamp_fresh(ts_value, tolerance_seconds=tolerance_seconds, now=now):
+            raise ValueError("stale_sendgrid_signature_timestamp")
+    try:
+        signature = base64.b64decode(signature_b64)
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("invalid_sendgrid_signature") from exc
+
+    verifier = _load_sendgrid_public_key(public_key)
+    try:
+        from cryptography.exceptions import InvalidSignature
+        from cryptography.hazmat.primitives import hashes
+        from cryptography.hazmat.primitives.asymmetric import ec
+
+        verifier.verify(signature, str(timestamp).encode("utf-8") + payload, ec.ECDSA(hashes.SHA256()))
+    except InvalidSignature as exc:
+        raise ValueError("invalid_sendgrid_signature") from exc
+    except ValueError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise ValueError("invalid_sendgrid_signature") from exc

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.models import Lead, OutreachEvent, Suppression
 from app.settings import get_settings
-from app.webhook_auth import verify_hmac_request, verify_mailgun_signature
+from app.webhook_auth import verify_hmac_request, verify_mailgun_signature, verify_sendgrid_signature
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
@@ -106,6 +106,30 @@ def _verify_mailgun_webhook_signature(raw_body: bytes, *, content_type: str | No
             token=token,
             signature=signature,
             tolerance_seconds=settings.mailgun_webhook_signature_tolerance_seconds,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return True
+
+
+def _verify_sendgrid_webhook_signature(
+    raw_body: bytes,
+    *,
+    signature_header: str | None,
+    timestamp_header: str | None,
+) -> bool:
+    settings = get_settings()
+    if not settings.sendgrid_webhook_public_key:
+        return False
+    if signature_header is None and timestamp_header is None:
+        return False
+    try:
+        verify_sendgrid_signature(
+            public_key=settings.sendgrid_webhook_public_key,
+            payload=raw_body,
+            signature_b64=signature_header,
+            timestamp=timestamp_header,
+            tolerance_seconds=settings.sendgrid_webhook_signature_tolerance_seconds,
         )
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
@@ -277,6 +301,8 @@ async def ingest_outreach_events(
     x_webhook_signature: str | None = Header(default=None),
     x_webhook_timestamp: str | None = Header(default=None),
     x_postmark_server_token: str | None = Header(default=None),
+    x_twilio_email_event_webhook_signature: str | None = Header(default=None),
+    x_twilio_email_event_webhook_timestamp: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     raw_body = await request.body()
@@ -284,6 +310,12 @@ async def ingest_outreach_events(
     content_type = request.headers.get("content-type")
     if settings.webhook_signature_secret:
         _verify_webhook_hmac(raw_body, x_webhook_signature, x_webhook_timestamp)
+    elif _verify_sendgrid_webhook_signature(
+        raw_body,
+        signature_header=x_twilio_email_event_webhook_signature,
+        timestamp_header=x_twilio_email_event_webhook_timestamp,
+    ):
+        pass
     elif settings.postmark_webhook_token and x_postmark_server_token is not None:
         _require_postmark_token(x_postmark_server_token)
     elif _verify_mailgun_webhook_signature(raw_body, content_type=content_type):

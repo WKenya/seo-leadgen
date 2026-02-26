@@ -26,6 +26,11 @@ class Settings(BaseSettings):
         default=300,
         alias="MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS",
     )
+    sendgrid_webhook_public_key: str = Field(default="", alias="SENDGRID_WEBHOOK_PUBLIC_KEY")
+    sendgrid_webhook_signature_tolerance_seconds: int = Field(
+        default=300,
+        alias="SENDGRID_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS",
+    )
     daily_send_cap: int = Field(default=5, alias="DAILY_SEND_CAP")
 
 

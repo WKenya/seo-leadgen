@@ -72,6 +72,7 @@ Webhooks:
   - HMAC payload format: `{unix_timestamp}.{raw_request_body}` (SHA-256 hex; `sha256=` prefix accepted)
   - optional Postmark native auth: `X-Postmark-Server-Token` via `POSTMARK_WEBHOOK_TOKEN`
   - optional Mailgun native auth: `signature.timestamp/token/signature` via `MAILGUN_WEBHOOK_SIGNING_KEY` (+ replay window via `MAILGUN_WEBHOOK_SIGNATURE_TOLERANCE_SECONDS`)
+  - optional SendGrid native auth: `X-Twilio-Email-Event-Webhook-Signature` + `X-Twilio-Email-Event-Webhook-Timestamp` via `SENDGRID_WEBHOOK_PUBLIC_KEY`
   - accepts normalized payload (`{"events":[...]}`), SendGrid arrays, Postmark payloads, and Mailgun `event-data` payloads (JSON + form-encoded)
 
 Admin triggers / review controls:
