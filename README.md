@@ -89,7 +89,9 @@ Webhook setup examples (copy/paste)
     - `{"signature":{"timestamp":"...","token":"...","signature":"..."},"event-data":{"id":"mg-1","event":"unsubscribed","recipient":"owner@example.com"}}`
   - form payload shape supported:
     - content type `application/x-www-form-urlencoded`
-    - `event-data=<json>` plus `signature[timestamp]`, `signature[token]`, `signature[signature]`
+    - `event-data=<json>` plus either:
+      - `signature[timestamp]`, `signature[token]`, `signature[signature]`
+      - or top-level `timestamp`, `token`, `signature`
 - SendGrid native signature mode:
   - set `SENDGRID_WEBHOOK_PUBLIC_KEY=<PEM public key>`
   - SendGrid sends:

@@ -520,6 +520,45 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row.reason, "opt_out")
 
+    def test_webhook_mailgun_signature_mode_accepts_form_encoded_top_level_signature_fields(self) -> None:
+        import time
+
+        from app.models import Lead, Suppression
+        from app.settings import get_settings
+        from app.webhook_auth import compute_mailgun_signature
+
+        lead = self._create_lead(email="owner@acme.example")
+        os.environ["MAILGUN_WEBHOOK_SIGNING_KEY"] = "mg-key"
+        os.environ["WEBHOOK_SHARED_SECRET"] = ""
+        get_settings.cache_clear()
+
+        timestamp = str(int(time.time()))
+        token = "plain-form-token"
+        signature = compute_mailgun_signature(signing_key="mg-key", timestamp=timestamp, token=token)
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            data={
+                "timestamp": timestamp,
+                "token": token,
+                "signature": signature,
+                "event-data": json.dumps(
+                    {
+                        "id": "mg-form-plain-1",
+                        "event": "unsubscribed",
+                        "recipient": "owner@acme.example",
+                    }
+                ),
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.reason, "opt_out")
+
 
 if __name__ == "__main__":
     unittest.main()

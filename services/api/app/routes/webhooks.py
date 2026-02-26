@@ -67,9 +67,9 @@ def _extract_mailgun_signature_fields(raw_body: bytes, *, content_type: str | No
     content_type_value = (content_type or "").split(";", 1)[0].strip().lower()
     if content_type_value == "application/x-www-form-urlencoded":
         parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
-        ts = (parsed.get("signature[timestamp]") or [None])[0]
-        token = (parsed.get("signature[token]") or [None])[0]
-        sig = (parsed.get("signature[signature]") or [None])[0]
+        ts = (parsed.get("signature[timestamp]") or parsed.get("timestamp") or [None])[0]
+        token = (parsed.get("signature[token]") or parsed.get("token") or [None])[0]
+        sig = (parsed.get("signature[signature]") or parsed.get("signature") or [None])[0]
         if ts or token or sig:
             return (str(ts or ""), str(token or ""), str(sig or ""))
         return None
