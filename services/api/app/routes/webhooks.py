@@ -175,7 +175,7 @@ def _map_postmark_event_type(record_type: object, payload: dict[str, object]) ->
     if name in {"spamcomplaint", "spam_complaint"}:
         return "opt_out"
     if name == "subscriptionchange":
-        if bool(payload.get("SuppressSending")) or bool(payload.get("suppress_sending")):
+        if _is_truthy(payload.get("SuppressSending")) or _is_truthy(payload.get("suppress_sending")):
             return "opt_out"
     return None
 
@@ -187,6 +187,16 @@ def _map_mailgun_event_type(value: object) -> str | None:
     if name in {"unsubscribed", "complained"}:
         return "opt_out"
     return None
+
+
+def _is_truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+    return False
 
 
 def _normalize_sendgrid_events(raw_events: list[object]) -> list[OutreachWebhookEvent]:

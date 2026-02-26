@@ -395,6 +395,44 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 0)
         self.assertEqual(body["duplicates"], 0)
 
+    def test_webhook_token_mode_postmark_subscription_change_false_string_is_noop(self) -> None:
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "RecordType": "SubscriptionChange",
+                "MessageID": "pm-sub-0",
+                "Email": "owner@acme.example",
+                "SuppressSending": "false",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["duplicates"], 0)
+
+    def test_webhook_token_mode_postmark_subscription_change_true_string_suppresses(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "RecordType": "SubscriptionChange",
+                "MessageID": "pm-sub-1",
+                "Email": "owner@acme.example",
+                "SuppressSending": "true",
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.reason, "opt_out")
+
     def test_webhook_token_mode_accepts_mailgun_event_data_payload(self) -> None:
         from app.models import Lead, Suppression
 
