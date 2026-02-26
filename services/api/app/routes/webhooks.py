@@ -161,9 +161,9 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
 
 def _map_sendgrid_event_type(value: object) -> str | None:
     name = str(value or "").strip().lower()
-    if name == "bounce":
+    if name in {"bounce", "dropped"}:
         return "bounced"
-    if name in {"unsubscribe", "group_unsubscribe", "spamreport"}:
+    if name in {"unsubscribe", "group_unsubscribe", "spamreport", "spam_report"}:
         return "opt_out"
     return None
 

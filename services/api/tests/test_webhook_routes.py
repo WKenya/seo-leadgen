@@ -228,6 +228,40 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(row.email_or_domain, "owner@acme.example")
         self.assertEqual(row.reason, "opt_out")
 
+    def test_webhook_token_mode_accepts_sendgrid_dropped_event_as_bounced(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json=[{"email": "owner@acme.example", "event": "dropped", "sg_event_id": "sg-drop-1"}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.reason, "bounced")
+
+    def test_webhook_token_mode_accepts_sendgrid_spam_report_variant(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json=[{"email": "owner@acme.example", "event": "spam_report", "sg_event_id": "sg-spam-1"}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.reason, "opt_out")
+
     def test_webhook_sendgrid_signature_mode_accepts_valid_headers(self) -> None:
         import base64
 
