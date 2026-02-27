@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -78,9 +78,14 @@ class EmailDraft(Base):
 
 class OutreachEvent(Base):
     __tablename__ = "outreach_events"
+    __table_args__ = (
+        Index("ix_outreach_events_created_at", "created_at"),
+        Index("ix_outreach_events_lead_id_created_at", "lead_id", "created_at"),
+        Index("ix_outreach_events_type_created_at", "type", "created_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id"), index=True)
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("leads.id"))
     external_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True, unique=True)
     type: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
