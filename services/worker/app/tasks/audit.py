@@ -40,7 +40,7 @@ def audit_lead(lead_id: str) -> dict[str, object]:
             CrawlConfig(
                 max_pages=settings.crawl_max_pages,
                 delay_seconds=settings.crawl_delay_seconds,
-                respect_robots=True,
+                respect_robots=settings.crawl_respect_robots,
             ),
         )
         lighthouse_result = None

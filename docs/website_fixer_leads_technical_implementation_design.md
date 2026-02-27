@@ -200,6 +200,7 @@ Required:
 - `DAILY_SEND_CAP=5`
 - `CRAWL_MAX_PAGES=10`
 - `CRAWL_DELAY_SECONDS=1.0`
+- `CRAWL_RESPECT_ROBOTS=1` (default on)
 - `AUDIT_LIGHTHOUSE_URL=http://audit:8081/run`
 
 Gmail drafts (if using Gmail API):
@@ -346,6 +347,7 @@ Operational notes:
 
 ### Rate limiting
 - Domain crawl: `CRAWL_DELAY_SECONDS` delay between fetches; max concurrency per domain = 1
+- Robots policy: `CRAWL_RESPECT_ROBOTS` (default: respect robots.txt)
 - Sends: enforce `DAILY_SEND_CAP` in DB (count of sent today)
 
 ---

@@ -99,6 +99,9 @@ def crawl_site(start_url: str, config: CrawlConfig) -> dict[str, object]:
                 target = normalize_link(str(response.url), href)
                 if not target:
                     continue
+                is_internal = is_internal_url(start_url, target)
+                if robots and is_internal and not robots.can_fetch("*", target):
+                    continue
                 if target not in checked_links:
                     checked_links.add(target)
                     status_code, error = _check_link(client, target)
@@ -111,9 +114,7 @@ def crawl_site(start_url: str, config: CrawlConfig) -> dict[str, object]:
                                 "error": error,
                             }
                         )
-                if is_internal_url(start_url, target) and target not in visited_pages and target not in queued_pages:
-                    if robots and not robots.can_fetch("*", target):
-                        continue
+                if is_internal and target not in visited_pages and target not in queued_pages:
                     queue.append(target)
                     queued_pages.add(target)
 

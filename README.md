@@ -124,6 +124,7 @@ Admin triggers / review controls:
 Notes:
 - discovery uses Google Nearby Search when `radius_meters` > 0 (geocoded city center), then falls back to Text Search if needed
 - audit checks now include basic SEO hygiene on the audited homepage (title/meta/canonical/robots noindex)
+- crawl robots policy defaults to on (`CRAWL_RESPECT_ROBOTS=1`) and can be toggled if needed
 - broken-link issues are aggregated by target URL/status (repeat count in issue title) to reduce noisy duplicates
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
