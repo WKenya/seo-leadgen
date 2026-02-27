@@ -19,7 +19,7 @@ NPM ?= npm
 API_TEST_PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 HAS_COMPOSE := $(shell (command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1) && echo yes || echo no)
 
-.PHONY: help doctor require-compose require-compose-engine env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev check test
+.PHONY: help doctor require-compose require-compose-engine env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke check test
 
 help:
 	@printf "%s\n" \
@@ -29,6 +29,7 @@ help:
 	"make build         - docker compose build" \
 	"make up            - start full docker stack in background" \
 	"make standup       - env + up + migrate (one-command bring-up)" \
+	"make smoke         - curl health/readiness/metrics endpoints" \
 	"make down          - stop docker stack" \
 	"make logs          - tail all container logs" \
 	"make migrate       - run alembic migrations in worker container" \
@@ -140,6 +141,21 @@ scheduler-dev: env
 
 audit-dev:
 	cd services/audit && $(NPM) start
+
+smoke:
+	@command -v curl >/dev/null 2>&1 || (echo "missing: curl"; exit 1)
+	@echo "api /healthz"
+	@curl -fsS http://localhost:8080/healthz
+	@echo
+	@echo "api /readyz"
+	@curl -fsS http://localhost:8080/readyz
+	@echo
+	@echo "api /metrics/summary"
+	@curl -fsS http://localhost:8080/metrics/summary
+	@echo
+	@echo "audit /healthz"
+	@curl -fsS http://localhost:8081/healthz
+	@echo
 
 check:
 	python3 -m compileall services/api/app services/worker/app migrations

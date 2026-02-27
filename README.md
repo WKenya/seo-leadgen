@@ -23,6 +23,7 @@ Note:
 Container path (Docker/Podman):
 - `make doctor`
 - `make standup`
+- `make smoke`
 - `make logs`
 
 If `make standup` says Podman engine not ready:
