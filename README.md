@@ -61,6 +61,7 @@ Drafts / events:
 - `GET /leads/{lead_id}/drafts` (`limit`, `offset`)
 - `GET /leads/{lead_id}/events` (`event_type`, `provider`, `limit`, `offset`)
   - event items include top-level provider fields (`provider`, `provider_event_id`, `provider_event_name`, `provider_event_at`) when present
+  - paginated list responses include `count`, `limit`, `offset`
 
 Suppression:
 - `GET /suppression` (`q`, `limit`, `offset`)

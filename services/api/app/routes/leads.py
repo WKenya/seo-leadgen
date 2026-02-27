@@ -26,8 +26,10 @@ def list_leads(
         like = f"%{q}%"
         stmt = stmt.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)))
     leads = db.execute(stmt).scalars().all()
+    items = [LeadRead.from_model(lead).model_dump() for lead in leads]
     return {
-        "items": [LeadRead.from_model(lead).model_dump() for lead in leads],
+        "items": items,
+        "count": len(items),
         "status_filter": status,
         "q": q,
         "limit": limit,
@@ -60,7 +62,8 @@ def list_lead_audits(
         .scalars()
         .all()
     )
-    return {"items": [AuditRead.from_model(audit).model_dump() for audit in audits], "limit": limit, "offset": offset}
+    items = [AuditRead.from_model(audit).model_dump() for audit in audits]
+    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
 
 
 @router.get("/{lead_id}/pipeline")

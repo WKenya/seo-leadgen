@@ -20,4 +20,5 @@ def list_suppression(
     if q:
         stmt = stmt.where(Suppression.email_or_domain.ilike(f"%{q}%"))
     rows = db.execute(stmt).scalars().all()
-    return {"items": [SuppressionRead.from_model(row).model_dump() for row in rows], "limit": limit, "offset": offset}
+    items = [SuppressionRead.from_model(row).model_dump() for row in rows]
+    return {"items": items, "count": len(items), "limit": limit, "offset": offset}

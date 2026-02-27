@@ -27,7 +27,8 @@ def list_events(
         provider_value = provider.strip().lower()
         events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
     events = events[offset : offset + limit]
-    return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit, "offset": offset}
+    items = [OutreachEventRead.from_model(event).model_dump() for event in events]
+    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
 
 
 @router.get("/drafts")
@@ -41,7 +42,8 @@ def list_drafts(
     if lead_id is not None:
         stmt = stmt.where(EmailDraft.lead_id == lead_id)
     drafts = db.execute(stmt).scalars().all()
-    return {"items": [EmailDraftRead.from_model(draft).model_dump() for draft in drafts], "limit": limit, "offset": offset}
+    items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
+    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
 
 
 @router.get("/drafts/{draft_id}")
@@ -73,7 +75,8 @@ def list_lead_drafts(
         .scalars()
         .all()
     )
-    return {"items": [EmailDraftRead.from_model(draft).model_dump() for draft in drafts], "limit": limit, "offset": offset}
+    items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
+    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
 
 
 @router.get("/leads/{lead_id}/events")
@@ -96,4 +99,5 @@ def list_lead_events(
         provider_value = provider.strip().lower()
         events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
     events = events[offset : offset + limit]
-    return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit, "offset": offset}
+    items = [OutreachEventRead.from_model(event).model_dump() for event in events]
+    return {"items": items, "count": len(items), "limit": limit, "offset": offset}

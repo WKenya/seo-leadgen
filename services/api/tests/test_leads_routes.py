@@ -123,6 +123,7 @@ class LeadRouteTests(unittest.TestCase):
         self.assertEqual(body["q"], "hvac")
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 0)
+        self.assertEqual(body["count"], 1)
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["name"], "Gamma HVAC")
 
@@ -130,6 +131,7 @@ class LeadRouteTests(unittest.TestCase):
         self.assertEqual(response2.status_code, 200, response2.text)
         body2 = response2.json()
         self.assertEqual(body2["offset"], 1)
+        self.assertEqual(body2["count"], 0)
         self.assertEqual(len(body2["items"]), 0)
 
     def test_get_lead_returns_404_when_missing(self) -> None:
@@ -155,6 +157,7 @@ class LeadRouteTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 1)
+        self.assertEqual(body["count"], 1)
         self.assertEqual(len(body["items"]), 1)
         self.assertTrue(all(item["lead_id"] == str(lead1.id) for item in body["items"]))
         self.assertEqual(body["items"][0]["id"], str(audit1.id))
