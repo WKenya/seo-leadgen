@@ -144,18 +144,23 @@ audit-dev:
 
 smoke:
 	@command -v curl >/dev/null 2>&1 || (echo "missing: curl"; exit 1)
-	@echo "api /healthz"
-	@curl -fsS http://localhost:8080/healthz
-	@echo
-	@echo "api /readyz"
-	@curl -fsS http://localhost:8080/readyz
-	@echo
-	@echo "api /metrics/summary"
-	@curl -fsS http://localhost:8080/metrics/summary
-	@echo
-	@echo "audit /healthz"
-	@curl -fsS http://localhost:8081/healthz
-	@echo
+	@set -e; \
+	for item in \
+		"api /healthz|http://localhost:8080/healthz" \
+		"api /readyz|http://localhost:8080/readyz" \
+		"api /metrics/summary|http://localhost:8080/metrics/summary" \
+		"audit /healthz|http://localhost:8081/healthz"; do \
+		label=$${item%%|*}; \
+		url=$${item##*|}; \
+		echo "$$label"; \
+		if ! curl -fsS "$$url"; then \
+			echo; \
+			echo "smoke failed: $$url"; \
+			echo "hint: run make standup, then rerun make smoke"; \
+			exit 2; \
+		fi; \
+		echo; \
+	done
 
 check:
 	python3 -m compileall services/api/app services/worker/app migrations
