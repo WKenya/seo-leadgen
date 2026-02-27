@@ -264,6 +264,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["limit"], 10)
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["payload"]["provider"], "postmark")
+        self.assertEqual(body["items"][0]["provider"], "postmark")
+        self.assertEqual(body["items"][0]["provider_event_id"], "pm-1")
 
         lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"provider": "mailgun", "limit": 10})
         self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
@@ -271,6 +273,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(len(lead_items), 1)
         self.assertEqual(lead_items[0]["type"], "sent")
         self.assertEqual(lead_items[0]["payload"]["provider"], "mailgun")
+        self.assertEqual(lead_items[0]["provider"], "mailgun")
+        self.assertEqual(lead_items[0]["provider_event_id"], "mg-1")
 
     def test_list_suppression_supports_q_and_limit(self) -> None:
         self._seed_lead_bundle()

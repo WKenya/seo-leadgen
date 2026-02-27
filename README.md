@@ -60,6 +60,7 @@ Drafts / events:
 - `GET /drafts/{draft_id}`
 - `GET /leads/{lead_id}/drafts`
 - `GET /leads/{lead_id}/events` (`event_type`, `provider`, `limit`)
+  - event items include top-level provider fields (`provider`, `provider_event_id`, `provider_event_name`, `provider_event_at`) when present
 
 Suppression:
 - `GET /suppression`
