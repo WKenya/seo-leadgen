@@ -121,6 +121,7 @@ class LeadRouteTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["status_filter"], "Suppressed")
         self.assertEqual(body["q"], "hvac")
+        self.assertEqual(body["sort"], "desc")
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 0)
         self.assertEqual(body["count"], 1)
@@ -133,6 +134,7 @@ class LeadRouteTests(unittest.TestCase):
         response2 = self.client.get("/leads", params={"status": "Suppressed", "q": "hvac", "limit": 1, "offset": 1})
         self.assertEqual(response2.status_code, 200, response2.text)
         body2 = response2.json()
+        self.assertEqual(body2["sort"], "desc")
         self.assertEqual(body2["offset"], 1)
         self.assertEqual(body2["count"], 0)
         self.assertEqual(body2["total"], 1)
@@ -161,6 +163,7 @@ class LeadRouteTests(unittest.TestCase):
         response = self.client.get(f"/leads/{lead1.id}/audits", params={"limit": 1, "offset": 1})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
+        self.assertEqual(body["sort"], "desc")
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 1)
         self.assertEqual(body["count"], 1)
@@ -170,6 +173,22 @@ class LeadRouteTests(unittest.TestCase):
         self.assertEqual(len(body["items"]), 1)
         self.assertTrue(all(item["lead_id"] == str(lead1.id) for item in body["items"]))
         self.assertEqual(body["items"][0]["id"], str(audit1.id))
+
+    def test_list_leads_supports_sort_asc(self) -> None:
+        now = datetime.now(timezone.utc)
+        self._create_lead(name="Zulu", website_url="https://zulu.example", created_at=now - timedelta(minutes=1))
+        self._create_lead(name="Alpha", website_url="https://alpha.example", created_at=now - timedelta(minutes=3))
+        self._create_lead(name="Mike", website_url="https://mike.example", created_at=now - timedelta(minutes=2))
+
+        response = self.client.get("/leads", params={"limit": 2, "offset": 0, "sort": "asc"})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["sort"], "asc")
+        self.assertEqual(body["count"], 2)
+        self.assertEqual(body["total"], 3)
+        self.assertTrue(body["has_more"])
+        self.assertEqual(body["next_offset"], 2)
+        self.assertEqual([item["name"] for item in body["items"]], ["Alpha", "Mike"])
 
     def test_pipeline_returns_latest_audit_latest_draft_and_recent_events(self) -> None:
         from app.models import Audit, EmailDraft, OutreachEvent

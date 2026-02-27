@@ -230,6 +230,7 @@ class ReadRouteTests(unittest.TestCase):
         response = self.client.get("/drafts", params={"lead_id": str(lead1.id), "limit": 1, "offset": 1})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
+        self.assertEqual(body["sort"], "desc")
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 1)
         self.assertEqual(body["count"], 1)
@@ -238,6 +239,12 @@ class ReadRouteTests(unittest.TestCase):
         self.assertIsNone(body["next_offset"])
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["id"], str(draft_old.id))
+
+        asc_response = self.client.get("/drafts", params={"lead_id": str(lead1.id), "limit": 1, "offset": 0, "sort": "asc"})
+        self.assertEqual(asc_response.status_code, 200, asc_response.text)
+        asc_body = asc_response.json()
+        self.assertEqual(asc_body["sort"], "asc")
+        self.assertEqual(asc_body["items"][0]["id"], str(draft_old.id))
 
         get_resp = self.client.get(f"/drafts/{draft_new.id}")
         self.assertEqual(get_resp.status_code, 200, get_resp.text)
@@ -250,6 +257,7 @@ class ReadRouteTests(unittest.TestCase):
         response = self.client.get("/events", params={"event_type": "sent", "limit": 10, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
+        self.assertEqual(body["sort"], "desc")
         self.assertEqual(body["limit"], 10)
         self.assertEqual(body["offset"], 0)
         self.assertEqual(body["count"], 1)
@@ -262,6 +270,7 @@ class ReadRouteTests(unittest.TestCase):
         lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"event_type": "approved", "limit": 10, "offset": 0})
         self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
         lead_items = lead_resp.json()["items"]
+        self.assertEqual(lead_resp.json()["sort"], "desc")
         self.assertEqual(len(lead_items), 1)
         self.assertEqual(lead_items[0]["type"], "approved")
 
@@ -272,6 +281,7 @@ class ReadRouteTests(unittest.TestCase):
         response = self.client.get("/events", params={"provider": "postmark", "limit": 10, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
+        self.assertEqual(body["sort"], "desc")
         self.assertEqual(body["limit"], 10)
         self.assertEqual(body["offset"], 0)
         self.assertEqual(body["count"], 1)
@@ -286,6 +296,7 @@ class ReadRouteTests(unittest.TestCase):
         lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"provider": "mailgun", "limit": 10, "offset": 0})
         self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
         lead_items = lead_resp.json()["items"]
+        self.assertEqual(lead_resp.json()["sort"], "desc")
         self.assertEqual(len(lead_items), 1)
         self.assertEqual(lead_items[0]["type"], "sent")
         self.assertEqual(lead_items[0]["payload"]["provider"], "mailgun")
@@ -299,6 +310,7 @@ class ReadRouteTests(unittest.TestCase):
         response = self.client.get("/events", params={"limit": 1, "offset": 1})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
+        self.assertEqual(body["sort"], "desc")
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 1)
         self.assertEqual(body["count"], 1)
@@ -311,6 +323,7 @@ class ReadRouteTests(unittest.TestCase):
         lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"limit": 1, "offset": 1})
         self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
         lead_body = lead_resp.json()
+        self.assertEqual(lead_body["sort"], "desc")
         self.assertEqual(lead_body["limit"], 1)
         self.assertEqual(lead_body["offset"], 1)
         self.assertEqual(lead_body["count"], 1)
@@ -320,11 +333,18 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(len(lead_body["items"]), 1)
         self.assertEqual(lead_body["items"][0]["type"], "approved")
 
+        asc_response = self.client.get("/events", params={"limit": 1, "offset": 0, "sort": "asc"})
+        self.assertEqual(asc_response.status_code, 200, asc_response.text)
+        asc_body = asc_response.json()
+        self.assertEqual(asc_body["sort"], "asc")
+        self.assertEqual(asc_body["items"][0]["type"], "approved")
+
     def test_list_suppression_supports_q_and_limit(self) -> None:
         self._seed_lead_bundle()
         response = self.client.get("/suppression", params={"q": "acme", "limit": 1, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
+        self.assertEqual(body["sort"], "desc")
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 0)
         self.assertEqual(body["count"], 1)
@@ -337,6 +357,7 @@ class ReadRouteTests(unittest.TestCase):
         response2 = self.client.get("/suppression", params={"limit": 1, "offset": 1})
         self.assertEqual(response2.status_code, 200, response2.text)
         body2 = response2.json()
+        self.assertEqual(body2["sort"], "desc")
         self.assertEqual(body2["limit"], 1)
         self.assertEqual(body2["offset"], 1)
         self.assertEqual(body2["count"], 1)
@@ -345,6 +366,12 @@ class ReadRouteTests(unittest.TestCase):
         self.assertIsNone(body2["next_offset"])
         self.assertEqual(len(body2["items"]), 1)
         self.assertEqual(body2["items"][0]["email_or_domain"], "bravo.example")
+
+        asc_response = self.client.get("/suppression", params={"limit": 1, "offset": 0, "sort": "asc"})
+        self.assertEqual(asc_response.status_code, 200, asc_response.text)
+        asc_body = asc_response.json()
+        self.assertEqual(asc_body["sort"], "asc")
+        self.assertEqual(asc_body["items"][0]["email_or_domain"], "bravo.example")
 
 
 if __name__ == "__main__":

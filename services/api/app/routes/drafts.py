@@ -17,9 +17,11 @@ def list_events(
     provider: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=5000),
+    sort: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    stmt = select(OutreachEvent).order_by(OutreachEvent.created_at.desc())
+    order_column = OutreachEvent.created_at.asc() if sort == "asc" else OutreachEvent.created_at.desc()
+    stmt = select(OutreachEvent).order_by(order_column)
     if event_type:
         stmt = stmt.where(OutreachEvent.type == event_type)
     events = db.execute(stmt).scalars().all()
@@ -36,6 +38,7 @@ def list_events(
         "total": total,
         "has_more": (offset + count) < total,
         "next_offset": (offset + count) if (offset + count) < total else None,
+        "sort": sort,
         "limit": limit,
         "offset": offset,
     }
@@ -46,13 +49,15 @@ def list_drafts(
     lead_id: UUID | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=5000),
+    sort: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     base = select(EmailDraft)
     if lead_id is not None:
         base = base.where(EmailDraft.lead_id == lead_id)
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
-    drafts = db.execute(base.order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)).scalars().all()
+    order_column = EmailDraft.created_at.asc() if sort == "asc" else EmailDraft.created_at.desc()
+    drafts = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
     count = len(items)
     return {
@@ -61,6 +66,7 @@ def list_drafts(
         "total": total,
         "has_more": (offset + count) < total,
         "next_offset": (offset + count) if (offset + count) < total else None,
+        "sort": sort,
         "limit": limit,
         "offset": offset,
     }
@@ -79,6 +85,7 @@ def list_lead_drafts(
     lead_id: UUID,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=5000),
+    sort: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     lead = db.get(Lead, lead_id)
@@ -86,7 +93,8 @@ def list_lead_drafts(
         raise HTTPException(status_code=404, detail="lead not found")
     base = select(EmailDraft).where(EmailDraft.lead_id == lead_id)
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
-    drafts = db.execute(base.order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)).scalars().all()
+    order_column = EmailDraft.created_at.asc() if sort == "asc" else EmailDraft.created_at.desc()
+    drafts = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
     count = len(items)
     return {
@@ -95,6 +103,7 @@ def list_lead_drafts(
         "total": total,
         "has_more": (offset + count) < total,
         "next_offset": (offset + count) if (offset + count) < total else None,
+        "sort": sort,
         "limit": limit,
         "offset": offset,
     }
@@ -107,12 +116,14 @@ def list_lead_events(
     provider: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=5000),
+    sort: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
-    stmt = select(OutreachEvent).where(OutreachEvent.lead_id == lead_id).order_by(OutreachEvent.created_at.desc())
+    order_column = OutreachEvent.created_at.asc() if sort == "asc" else OutreachEvent.created_at.desc()
+    stmt = select(OutreachEvent).where(OutreachEvent.lead_id == lead_id).order_by(order_column)
     if event_type:
         stmt = stmt.where(OutreachEvent.type == event_type)
     events = db.execute(stmt).scalars().all()
@@ -129,6 +140,7 @@ def list_lead_events(
         "total": total,
         "has_more": (offset + count) < total,
         "next_offset": (offset + count) if (offset + count) < total else None,
+        "sort": sort,
         "limit": limit,
         "offset": offset,
     }

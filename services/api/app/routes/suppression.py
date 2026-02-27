@@ -14,13 +14,15 @@ def list_suppression(
     q: str | None = Query(default=None, description="substring filter"),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0, le=5000),
+    sort: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     base = select(Suppression)
     if q:
         base = base.where(Suppression.email_or_domain.ilike(f"%{q}%"))
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
-    stmt = base.order_by(Suppression.created_at.desc()).offset(offset).limit(limit)
+    order_column = Suppression.created_at.asc() if sort == "asc" else Suppression.created_at.desc()
+    stmt = base.order_by(order_column).offset(offset).limit(limit)
     rows = db.execute(stmt).scalars().all()
     items = [SuppressionRead.from_model(row).model_dump() for row in rows]
     count = len(items)
@@ -30,6 +32,7 @@ def list_suppression(
         "total": total,
         "has_more": (offset + count) < total,
         "next_offset": (offset + count) if (offset + count) < total else None,
+        "sort": sort,
         "limit": limit,
         "offset": offset,
     }
