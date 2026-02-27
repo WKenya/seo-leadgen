@@ -20,6 +20,7 @@ Read when:
 ## Local Gate
 1. `make test`
 2. `make check`
+3. Optional shortcut: `make gate-local`
 
 ## Container Gate
 1. Start engine (Docker Desktop or Podman machine).
@@ -28,6 +29,7 @@ Read when:
 4. `make smoke-e2e`
 5. Optional full rebuild during smoke: `SEO_LEAD_SMOKE_BUILD=1 make smoke-e2e`
    - includes audit service `/run` schema check
+6. Optional shortcut: `make gate-container`
 
 If `make smoke-e2e` fails with engine-not-ready:
 - Podman:

@@ -28,6 +28,7 @@ Container path (Docker/Podman):
 - `make smoke-e2e`
 - `make logs`
 - optional image rebuild during smoke: `SEO_LEAD_SMOKE_BUILD=1 make smoke-e2e`
+- one-command gates: `make gate-local` and `make gate-container`
 
 If `make standup` says Podman engine not ready:
 - `podman machine init` (first run)
