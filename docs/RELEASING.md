@@ -1,5 +1,10 @@
 # Releasing
 
+Read when:
+- preparing a release commit/tag
+- validating local/container gates before push
+- checking post-release health endpoints
+
 ## Scope
 - MVP monorepo: `services/api`, `services/worker`, `services/audit`.
 - Goal: reproducible local/container verification before tag/push.

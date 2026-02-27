@@ -3,6 +3,11 @@
 **Audience:** Codex/agentic coding system that will implement the MVP end-to-end.  
 **Scope:** Cleveland-first local leads → automated audits → LLM summary + email draft → Notion board → human-approved email sending → suppression/opt-outs.
 
+Read when:
+- implementing/changing core pipeline behavior
+- adding env vars, migrations, or queue tasks
+- checking milestone status against implementation
+
 ---
 
 ## 0) Assumptions (can be changed later)
