@@ -16,9 +16,10 @@ def list_leads(
     status: str | None = Query(default=None),
     q: str | None = Query(default=None, description="name/domain substring"),
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    stmt = select(Lead).order_by(Lead.created_at.desc()).limit(limit)
+    stmt = select(Lead).order_by(Lead.created_at.desc()).offset(offset).limit(limit)
     if status:
         stmt = stmt.where(Lead.status == status)
     if q:
@@ -30,6 +31,7 @@ def list_leads(
         "status_filter": status,
         "q": q,
         "limit": limit,
+        "offset": offset,
     }
 
 
@@ -45,17 +47,20 @@ def get_lead(lead_id: UUID, db: Session = Depends(get_db)) -> dict[str, object]:
 def list_lead_audits(
     lead_id: UUID,
     limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
     audits = (
-        db.execute(select(Audit).where(Audit.lead_id == lead_id).order_by(Audit.started_at.desc()).limit(limit))
+        db.execute(
+            select(Audit).where(Audit.lead_id == lead_id).order_by(Audit.started_at.desc()).offset(offset).limit(limit)
+        )
         .scalars()
         .all()
     )
-    return {"items": [AuditRead.from_model(audit).model_dump() for audit in audits], "limit": limit}
+    return {"items": [AuditRead.from_model(audit).model_dump() for audit in audits], "limit": limit, "offset": offset}
 
 
 @router.get("/{lead_id}/pipeline")

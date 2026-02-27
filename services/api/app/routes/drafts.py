@@ -16,6 +16,7 @@ def list_events(
     event_type: str | None = Query(default=None),
     provider: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     stmt = select(OutreachEvent).order_by(OutreachEvent.created_at.desc())
@@ -25,21 +26,22 @@ def list_events(
     if provider:
         provider_value = provider.strip().lower()
         events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
-    events = events[:limit]
-    return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit}
+    events = events[offset : offset + limit]
+    return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit, "offset": offset}
 
 
 @router.get("/drafts")
 def list_drafts(
     lead_id: UUID | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    stmt = select(EmailDraft).order_by(EmailDraft.created_at.desc()).limit(limit)
+    stmt = select(EmailDraft).order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)
     if lead_id is not None:
         stmt = stmt.where(EmailDraft.lead_id == lead_id)
     drafts = db.execute(stmt).scalars().all()
-    return {"items": [EmailDraftRead.from_model(draft).model_dump() for draft in drafts], "limit": limit}
+    return {"items": [EmailDraftRead.from_model(draft).model_dump() for draft in drafts], "limit": limit, "offset": offset}
 
 
 @router.get("/drafts/{draft_id}")
@@ -54,6 +56,7 @@ def get_draft(draft_id: UUID, db: Session = Depends(get_db)) -> dict[str, object
 def list_lead_drafts(
     lead_id: UUID,
     limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     lead = db.get(Lead, lead_id)
@@ -61,12 +64,16 @@ def list_lead_drafts(
         raise HTTPException(status_code=404, detail="lead not found")
     drafts = (
         db.execute(
-            select(EmailDraft).where(EmailDraft.lead_id == lead_id).order_by(EmailDraft.created_at.desc()).limit(limit)
+            select(EmailDraft)
+            .where(EmailDraft.lead_id == lead_id)
+            .order_by(EmailDraft.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         .scalars()
         .all()
     )
-    return {"items": [EmailDraftRead.from_model(draft).model_dump() for draft in drafts], "limit": limit}
+    return {"items": [EmailDraftRead.from_model(draft).model_dump() for draft in drafts], "limit": limit, "offset": offset}
 
 
 @router.get("/leads/{lead_id}/events")
@@ -75,6 +82,7 @@ def list_lead_events(
     event_type: str | None = Query(default=None),
     provider: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
+    offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     lead = db.get(Lead, lead_id)
@@ -87,5 +95,5 @@ def list_lead_events(
     if provider:
         provider_value = provider.strip().lower()
         events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
-    events = events[:limit]
-    return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit}
+    events = events[offset : offset + limit]
+    return {"items": [OutreachEventRead.from_model(event).model_dump() for event in events], "limit": limit, "offset": offset}

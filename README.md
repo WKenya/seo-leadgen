@@ -47,23 +47,23 @@ Health:
 - `GET /metrics/summary` (includes events-by-type today, webhook provider breakdown, provider/type breakdown, latest webhook providers; optional `provider` and `latest_limit` query params)
 
 Leads / audits / issues:
-- `GET /leads`
+- `GET /leads` (`status`, `q`, `limit`, `offset`)
 - `GET /leads/{lead_id}`
-- `GET /leads/{lead_id}/audits`
+- `GET /leads/{lead_id}/audits` (`limit`, `offset`)
 - `GET /leads/{lead_id}/pipeline`
 - `GET /audits/{audit_id}`
 - `GET /audits/{audit_id}/issues`
 
 Drafts / events:
-- `GET /events` (`event_type`, `provider`, `limit`)
-- `GET /drafts`
+- `GET /events` (`event_type`, `provider`, `limit`, `offset`)
+- `GET /drafts` (`lead_id`, `limit`, `offset`)
 - `GET /drafts/{draft_id}`
-- `GET /leads/{lead_id}/drafts`
-- `GET /leads/{lead_id}/events` (`event_type`, `provider`, `limit`)
+- `GET /leads/{lead_id}/drafts` (`limit`, `offset`)
+- `GET /leads/{lead_id}/events` (`event_type`, `provider`, `limit`, `offset`)
   - event items include top-level provider fields (`provider`, `provider_event_id`, `provider_event_name`, `provider_event_at`) when present
 
 Suppression:
-- `GET /suppression`
+- `GET /suppression` (`q`, `limit`, `offset`)
 
 Artifacts:
 - `GET /artifacts/{path}` (optional Basic Auth via `ARTIFACTS_BASIC_AUTH_*`)

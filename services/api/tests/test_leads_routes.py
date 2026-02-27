@@ -87,7 +87,14 @@ class LeadRouteTests(unittest.TestCase):
                 os.environ[key] = value
         self._get_settings.cache_clear()
 
-    def _create_lead(self, *, name: str, website_url: str, status: str = "Discovered"):
+    def _create_lead(
+        self,
+        *,
+        name: str,
+        website_url: str,
+        status: str = "Discovered",
+        created_at: datetime | None = None,
+    ):
         from app.models import Lead
 
         lead = Lead(
@@ -97,24 +104,33 @@ class LeadRouteTests(unittest.TestCase):
             source="google_places",
             website_url=website_url,
             status=status,
+            created_at=created_at,
         )
         self.db.add(lead)
         self.db.commit()
         return lead
 
     def test_list_leads_applies_status_q_and_limit_filters(self) -> None:
-        self._create_lead(name="Alpha HVAC", website_url="https://alpha.example", status="Discovered")
-        self._create_lead(name="Beta Dental", website_url="https://beta.example", status="Suppressed")
-        self._create_lead(name="Gamma HVAC", website_url="https://gamma.example", status="Suppressed")
+        now = datetime.now(timezone.utc)
+        self._create_lead(name="Alpha HVAC", website_url="https://alpha.example", status="Discovered", created_at=now - timedelta(minutes=3))
+        self._create_lead(name="Beta Dental", website_url="https://beta.example", status="Suppressed", created_at=now - timedelta(minutes=2))
+        self._create_lead(name="Gamma HVAC", website_url="https://gamma.example", status="Suppressed", created_at=now - timedelta(minutes=1))
 
-        response = self.client.get("/leads", params={"status": "Suppressed", "q": "beta", "limit": 1})
+        response = self.client.get("/leads", params={"status": "Suppressed", "q": "hvac", "limit": 1, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["status_filter"], "Suppressed")
-        self.assertEqual(body["q"], "beta")
+        self.assertEqual(body["q"], "hvac")
         self.assertEqual(body["limit"], 1)
+        self.assertEqual(body["offset"], 0)
         self.assertEqual(len(body["items"]), 1)
-        self.assertEqual(body["items"][0]["name"], "Beta Dental")
+        self.assertEqual(body["items"][0]["name"], "Gamma HVAC")
+
+        response2 = self.client.get("/leads", params={"status": "Suppressed", "q": "hvac", "limit": 1, "offset": 1})
+        self.assertEqual(response2.status_code, 200, response2.text)
+        body2 = response2.json()
+        self.assertEqual(body2["offset"], 1)
+        self.assertEqual(len(body2["items"]), 0)
 
     def test_get_lead_returns_404_when_missing(self) -> None:
         response = self.client.get(f"/leads/{uuid4()}")
@@ -134,13 +150,14 @@ class LeadRouteTests(unittest.TestCase):
         self.db.add_all([audit1, audit2, audit3])
         self.db.commit()
 
-        response = self.client.get(f"/leads/{lead1.id}/audits", params={"limit": 5})
+        response = self.client.get(f"/leads/{lead1.id}/audits", params={"limit": 1, "offset": 1})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
-        self.assertEqual(body["limit"], 5)
-        self.assertEqual(len(body["items"]), 2)
+        self.assertEqual(body["limit"], 1)
+        self.assertEqual(body["offset"], 1)
+        self.assertEqual(len(body["items"]), 1)
         self.assertTrue(all(item["lead_id"] == str(lead1.id) for item in body["items"]))
-        self.assertEqual(body["items"][0]["id"], str(audit2.id))
+        self.assertEqual(body["items"][0]["id"], str(audit1.id))
 
     def test_pipeline_returns_latest_audit_latest_draft_and_recent_events(self) -> None:
         from app.models import Audit, EmailDraft, OutreachEvent

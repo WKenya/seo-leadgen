@@ -225,13 +225,15 @@ class ReadRouteTests(unittest.TestCase):
         seeded = self._seed_lead_bundle()
         lead1 = seeded["lead1"]
         draft_new = seeded["draft_new"]
+        draft_old = seeded["draft_old"]
 
-        response = self.client.get("/drafts", params={"lead_id": str(lead1.id), "limit": 5})
+        response = self.client.get("/drafts", params={"lead_id": str(lead1.id), "limit": 1, "offset": 1})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
-        self.assertEqual(body["limit"], 5)
-        self.assertEqual(len(body["items"]), 2)
-        self.assertEqual(body["items"][0]["subject"], "New")
+        self.assertEqual(body["limit"], 1)
+        self.assertEqual(body["offset"], 1)
+        self.assertEqual(len(body["items"]), 1)
+        self.assertEqual(body["items"][0]["id"], str(draft_old.id))
 
         get_resp = self.client.get(f"/drafts/{draft_new.id}")
         self.assertEqual(get_resp.status_code, 200, get_resp.text)
@@ -241,14 +243,15 @@ class ReadRouteTests(unittest.TestCase):
         seeded = self._seed_lead_bundle()
         lead1 = seeded["lead1"]
 
-        response = self.client.get("/events", params={"event_type": "sent", "limit": 10})
+        response = self.client.get("/events", params={"event_type": "sent", "limit": 10, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["limit"], 10)
+        self.assertEqual(body["offset"], 0)
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["type"], "sent")
 
-        lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"event_type": "approved", "limit": 10})
+        lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"event_type": "approved", "limit": 10, "offset": 0})
         self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
         lead_items = lead_resp.json()["items"]
         self.assertEqual(len(lead_items), 1)
@@ -258,16 +261,17 @@ class ReadRouteTests(unittest.TestCase):
         seeded = self._seed_lead_bundle()
         lead1 = seeded["lead1"]
 
-        response = self.client.get("/events", params={"provider": "postmark", "limit": 10})
+        response = self.client.get("/events", params={"provider": "postmark", "limit": 10, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["limit"], 10)
+        self.assertEqual(body["offset"], 0)
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["payload"]["provider"], "postmark")
         self.assertEqual(body["items"][0]["provider"], "postmark")
         self.assertEqual(body["items"][0]["provider_event_id"], "pm-1")
 
-        lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"provider": "mailgun", "limit": 10})
+        lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"provider": "mailgun", "limit": 10, "offset": 0})
         self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
         lead_items = lead_resp.json()["items"]
         self.assertEqual(len(lead_items), 1)
@@ -276,14 +280,43 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(lead_items[0]["provider"], "mailgun")
         self.assertEqual(lead_items[0]["provider_event_id"], "mg-1")
 
-    def test_list_suppression_supports_q_and_limit(self) -> None:
-        self._seed_lead_bundle()
-        response = self.client.get("/suppression", params={"q": "acme", "limit": 1})
+    def test_list_events_and_lead_events_support_offset(self) -> None:
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+
+        response = self.client.get("/events", params={"limit": 1, "offset": 1})
         self.assertEqual(response.status_code, 200, response.text)
         body = response.json()
         self.assertEqual(body["limit"], 1)
+        self.assertEqual(body["offset"], 1)
+        self.assertEqual(len(body["items"]), 1)
+        self.assertEqual(body["items"][0]["type"], "opt_out")
+
+        lead_resp = self.client.get(f"/leads/{lead1.id}/events", params={"limit": 1, "offset": 1})
+        self.assertEqual(lead_resp.status_code, 200, lead_resp.text)
+        lead_body = lead_resp.json()
+        self.assertEqual(lead_body["limit"], 1)
+        self.assertEqual(lead_body["offset"], 1)
+        self.assertEqual(len(lead_body["items"]), 1)
+        self.assertEqual(lead_body["items"][0]["type"], "approved")
+
+    def test_list_suppression_supports_q_and_limit(self) -> None:
+        self._seed_lead_bundle()
+        response = self.client.get("/suppression", params={"q": "acme", "limit": 1, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["limit"], 1)
+        self.assertEqual(body["offset"], 0)
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["email_or_domain"], "owner@acme.example")
+
+        response2 = self.client.get("/suppression", params={"limit": 1, "offset": 1})
+        self.assertEqual(response2.status_code, 200, response2.text)
+        body2 = response2.json()
+        self.assertEqual(body2["limit"], 1)
+        self.assertEqual(body2["offset"], 1)
+        self.assertEqual(len(body2["items"]), 1)
+        self.assertEqual(body2["items"][0]["email_or_domain"], "bravo.example")
 
 
 if __name__ == "__main__":
