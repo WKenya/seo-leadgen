@@ -134,6 +134,29 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].type, "replied")
 
+    def test_webhook_token_mode_normalizes_provider_field(self) -> None:
+        from app.models import OutreachEvent
+
+        lead = self._create_lead()
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "events": [
+                    {"lead_id": str(lead.id), "event_type": "replied", "event_id": "evt-provider-1", "provider": "SendGrid"}
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["processed_by_provider"], {"sendgrid": 1})
+        event = self.db.execute(select(OutreachEvent)).scalar_one_or_none()
+        self.assertIsNotNone(event)
+        self.assertEqual(event.provider, "sendgrid")
+        payload = event.payload or {}
+        self.assertEqual(payload.get("provider"), "sendgrid")
+
     def test_webhook_duplicate_event_id_is_counted_and_not_reinserted(self) -> None:
         from app.models import OutreachEvent
 
