@@ -19,7 +19,7 @@ NPM ?= npm
 API_TEST_PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 HAS_COMPOSE := $(shell (command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1) && echo yes || echo no)
 
-.PHONY: help doctor docs-list require-compose require-compose-engine env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test gate-local gate-container
+.PHONY: help doctor docs-list require-compose require-compose-engine env install install-api install-worker install-audit build up up-nobuild standup standup-nobuild down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test gate-local gate-container
 
 help:
 	@printf "%s\n" \
@@ -30,10 +30,11 @@ help:
 	"make build         - docker compose build" \
 	"make up            - start full docker stack in background" \
 	"make standup       - env + up + migrate (one-command bring-up)" \
+	"make standup-nobuild - env + up-nobuild + migrate (faster iterative bring-up)" \
 	"make smoke         - curl health/readiness/metrics endpoints" \
 	"make smoke-e2e     - container-backed API/data-path smoke flow" \
 	"make gate-local    - local verification gate (test + check)" \
-	"make gate-container- container verification gate (smoke + smoke-e2e)" \
+	"make gate-container - container verification gate (standup + smoke + smoke-e2e)" \
 	"make down          - stop docker stack" \
 	"make logs          - tail all container logs" \
 	"make migrate       - run alembic migrations in worker container" \
@@ -102,7 +103,12 @@ build: require-compose-engine
 up: require-compose-engine
 	$(COMPOSE) up --build -d
 
+up-nobuild: require-compose-engine
+	$(COMPOSE) up -d
+
 standup: env up migrate
+
+standup-nobuild: env up-nobuild migrate
 
 down: require-compose-engine
 	$(COMPOSE) down
@@ -160,12 +166,17 @@ smoke:
 		label=$${item%%|*}; \
 		url=$${item##*|}; \
 		echo "$$label"; \
-		if ! curl -fsS "$$url"; then \
-			echo; \
-			echo "smoke failed: $$url"; \
-			echo "hint: run make standup, then rerun make smoke"; \
-			exit 2; \
-		fi; \
+		attempt=0; \
+		until curl -fsS "$$url"; do \
+			attempt=$$((attempt + 1)); \
+			if [ "$$attempt" -ge 15 ]; then \
+				echo; \
+				echo "smoke failed: $$url"; \
+				echo "hint: run make standup, then rerun make smoke"; \
+				exit 2; \
+			fi; \
+			sleep 1; \
+		done; \
 		echo; \
 	done
 
@@ -181,4 +192,4 @@ test:
 
 gate-local: test check
 
-gate-container: smoke smoke-e2e
+gate-container: standup-nobuild smoke smoke-e2e
