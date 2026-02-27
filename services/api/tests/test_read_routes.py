@@ -297,6 +297,12 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(lead_items[0]["provider"], "mailgun")
         self.assertEqual(lead_items[0]["provider_event_id"], "mg-1")
 
+        mixed_case_resp = self.client.get("/events", params={"provider": "MaIlGuN", "limit": 10, "offset": 0})
+        self.assertEqual(mixed_case_resp.status_code, 200, mixed_case_resp.text)
+        mixed_items = mixed_case_resp.json()["items"]
+        self.assertEqual(len(mixed_items), 1)
+        self.assertEqual(mixed_items[0]["provider"], "mailgun")
+
     def test_list_events_and_lead_events_support_offset(self) -> None:
         seeded = self._seed_lead_bundle()
         lead1 = seeded["lead1"]
