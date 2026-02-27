@@ -18,8 +18,6 @@ IMPORT_ERROR = ""
 try:
     from fastapi.testclient import TestClient
     from sqlalchemy import create_engine, select
-    from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
-    from sqlalchemy.ext.compiler import compiles
     from sqlalchemy.orm import Session, sessionmaker
     from sqlalchemy.pool import StaticPool
 except Exception as exc:  # noqa: BLE001
@@ -27,13 +25,9 @@ except Exception as exc:  # noqa: BLE001
     IMPORT_ERROR = str(exc)
 
 if HAS_API_DEPS:
-    @compiles(JSONB, "sqlite")
-    def _compile_jsonb_sqlite(type_, compiler, **kw):  # noqa: ANN001
-        return "JSON"
+    from sqlite_test_shims import install_sqlite_shims
 
-    @compiles(PGUUID, "sqlite")
-    def _compile_uuid_sqlite(type_, compiler, **kw):  # noqa: ANN001
-        return "CHAR(36)"
+    install_sqlite_shims()
 
 
 class AdminRouteTests(unittest.TestCase):
