@@ -27,6 +27,7 @@ Read when:
 3. `make smoke`
 4. `make smoke-e2e`
 5. Optional full rebuild during smoke: `SEO_LEAD_SMOKE_BUILD=1 make smoke-e2e`
+   - includes audit service `/run` schema check
 
 If `make smoke-e2e` fails with engine-not-ready:
 - Podman:

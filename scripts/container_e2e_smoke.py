@@ -102,7 +102,30 @@ def _http_json(base_url: str, path: str, params: dict[str, str] | None = None) -
     raise RuntimeError(f"http request failed for {url}: {last_error}")
 
 
-def _wait_for_api(base_url: str, timeout_seconds: int = 60) -> None:
+def _http_post_json(base_url: str, path: str, payload: dict[str, object]) -> dict[str, object]:
+    url = urllib.parse.urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
+    body = json.dumps(payload).encode("utf-8")
+    last_error: Exception | None = None
+    for _attempt in range(3):
+        request = urllib.request.Request(
+            url=url,
+            data=body,
+            headers={"Accept": "application/json", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"http error from {url}: {exc.code} {body_text}") from exc
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError, OSError) as exc:
+            last_error = exc
+            time.sleep(0.5)
+    raise RuntimeError(f"http request failed for {url}: {last_error}")
+
+
+def _wait_for_service(base_url: str, *, service_name: str, timeout_seconds: int = 60) -> None:
     deadline = time.time() + timeout_seconds
     last_error: Exception | None = None
     while time.time() < deadline:
@@ -113,7 +136,7 @@ def _wait_for_api(base_url: str, timeout_seconds: int = 60) -> None:
         except Exception as exc:  # noqa: BLE001
             last_error = exc
         time.sleep(1.0)
-    raise RuntimeError(f"api did not become healthy within {timeout_seconds}s: {last_error}")
+    raise RuntimeError(f"{service_name} did not become healthy within {timeout_seconds}s: {last_error}")
 
 
 def _require(condition: bool, message: str) -> None:
@@ -308,9 +331,22 @@ def _run_checks(base_url: str, fixture: SeedFixture) -> None:
     _require(isinstance(provider_count, int) and provider_count >= 1, "metrics provider count missing")
 
 
+def _run_audit_checks(audit_base_url: str) -> None:
+    health = _http_json(audit_base_url, "/healthz")
+    _require(bool(health.get("ok")), "audit /healthz ok flag != true")
+
+    run_result = _http_post_json(audit_base_url, "/run", {"url": "http://localhost:8081/healthz"})
+    _require(bool(run_result.get("ok")), "audit /run ok flag != true")
+    summary = run_result.get("summary")
+    _require(isinstance(summary, dict), "audit /run summary missing")
+    for key in ("performance_score", "seo_score", "lcp_ms", "cls", "inp_ms"):
+        _require(key in summary, f"audit /run summary missing key: {key}")
+
+
 def main() -> int:
     compose_cmd = _detect_compose_cmd()
     api_base_url = os.environ.get("SEO_LEAD_API_BASE_URL", "http://localhost:8080")
+    audit_base_url = os.environ.get("SEO_LEAD_AUDIT_BASE_URL", "http://localhost:8081")
     build_images = os.environ.get("SEO_LEAD_SMOKE_BUILD", "").strip().lower() in {"1", "true", "yes"}
     fixture: SeedFixture | None = None
     try:
@@ -332,7 +368,9 @@ def main() -> int:
             ]
         )
         _ensure_schema_compatibility(compose_cmd)
-        _wait_for_api(api_base_url)
+        _wait_for_service(api_base_url, service_name="api")
+        _wait_for_service(audit_base_url, service_name="audit")
+        _run_audit_checks(audit_base_url)
         fixture = _seed_fixture(compose_cmd)
         _run_checks(api_base_url, fixture)
         print("container e2e smoke: ok")

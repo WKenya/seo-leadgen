@@ -138,3 +138,4 @@ Notes:
 
 - `make test`
 - `make smoke-e2e` (requires running Docker/Podman engine)
+  - validates API read paths and audit `/run` response schema
