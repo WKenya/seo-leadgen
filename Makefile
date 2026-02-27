@@ -16,7 +16,6 @@ endif
 
 UV ?= uv
 NPM ?= npm
-API_TEST_PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 HAS_COMPOSE := $(shell (command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1) && echo yes || echo no)
 
 .PHONY: help doctor docs-list require-compose require-compose-engine env install install-api install-worker install-audit build up up-nobuild standup standup-nobuild down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test gate-local gate-container
@@ -43,7 +42,7 @@ help:
 	"make worker-dev    - run worker locally (uv)" \
 	"make scheduler-dev - run celery beat locally (uv)" \
 	"make audit-dev     - run audit service locally (npm)" \
-	"make test          - run unit tests (stdlib unittest)"
+	"make test          - run unit tests (uv + unittest)"
 
 doctor:
 	@printf "compose runtime available: %s\n" "$(HAS_COMPOSE)"
@@ -184,11 +183,13 @@ smoke-e2e: require-compose-engine
 	SEO_LEAD_COMPOSE_CMD="$(COMPOSE)" python3 scripts/container_e2e_smoke.py
 
 check:
-	python3 -m compileall services/api/app services/worker/app migrations
+	cd services/api && $(UV) run python -m compileall app
+	cd services/worker && $(UV) run python -m compileall app
+	cd services/worker && $(UV) run python -m compileall ../../migrations
 
 test:
-	$(API_TEST_PY) -m unittest discover -s services/api/tests -p 'test_*.py' -v
-	python3 -m unittest discover -s services/worker/tests -p 'test_*.py' -v
+	cd services/api && $(UV) run python -m unittest discover -s tests -p 'test_*.py' -v
+	cd services/worker && $(UV) run python -m unittest discover -s tests -p 'test_*.py' -v
 
 gate-local: test check
 
