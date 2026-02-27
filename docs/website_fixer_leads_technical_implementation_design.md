@@ -518,7 +518,7 @@ Integration tests:
 
 ## 16) Milestones (Codex-friendly)
 
-Status note (2026-02-24): checklist updated to reflect implementation progress in repo. Remaining notable gaps: broader API route/integration tests, full container E2E smoke on running Docker/Podman engine.
+Status note (2026-02-27): checklist reflects current implementation. API route coverage now broad (admin/read/webhook/metrics), webhook provider auth/payload adapters are implemented and documented in `docs/website_fixer_leads_webhooks_integration_guide.md`. Remaining notable gap: full container E2E smoke on a running Docker/Podman engine.
 
 ### Milestone 1 — Skeleton + infra
 - [x] Repo + uv projects for api/worker
