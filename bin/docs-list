@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+docs_dir="$repo_root/docs"
+
+if [ ! -d "$docs_dir" ]; then
+  echo "docs directory not found: $docs_dir"
+  exit 1
+fi
+
+for file in "$docs_dir"/*.md; do
+  [ -f "$file" ] || continue
+  title="$(sed -n '1s/^# \{0,1\}//p' "$file")"
+  if [ -n "$title" ]; then
+    printf "%s\t%s\n" "$(basename "$file")" "$title"
+  else
+    printf "%s\n" "$(basename "$file")"
+  fi
+done

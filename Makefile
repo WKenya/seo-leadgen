@@ -19,12 +19,13 @@ NPM ?= npm
 API_TEST_PY ?= $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 HAS_COMPOSE := $(shell (command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1) && echo yes || echo no)
 
-.PHONY: help doctor require-compose require-compose-engine env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test
+.PHONY: help doctor docs-list require-compose require-compose-engine env install install-api install-worker install-audit build up standup down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test
 
 help:
 	@printf "%s\n" \
 	"make env           - create .env from .env.example if missing" \
 	"make doctor        - toolchain check (docker/podman, uv, npm)" \
+	"make docs-list     - list docs/* files with first-line titles" \
 	"make install       - install local dev deps (uv + npm)" \
 	"make build         - docker compose build" \
 	"make up            - start full docker stack in background" \
@@ -49,6 +50,9 @@ doctor:
 	@command -v docker-compose >/dev/null 2>&1 && docker-compose --version || true
 	@command -v $(UV) >/dev/null 2>&1 && $(UV) --version || (echo "missing: $(UV)" && exit 1)
 	@command -v $(NPM) >/dev/null 2>&1 && $(NPM) --version || (echo "missing: $(NPM)" && exit 1)
+
+docs-list:
+	./bin/docs-list
 
 require-compose:
 	@if [ "$(HAS_COMPOSE)" != "yes" ]; then \
