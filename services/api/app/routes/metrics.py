@@ -15,6 +15,7 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 @router.get("/summary")
 def metrics_summary(
     provider: str | None = Query(default=None, description="Optional webhook provider filter, e.g. sendgrid|mailgun|postmark"),
+    latest_limit: int = Query(default=10, ge=1, le=100),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     now = datetime.now(timezone.utc)
@@ -56,7 +57,9 @@ def metrics_summary(
         provider_types = webhook_event_types_by_provider_today.setdefault(provider, {})
         provider_types[event.type] = provider_types.get(event.type, 0) + 1
 
-    latest_event_rows = db.execute(select(OutreachEvent).order_by(OutreachEvent.created_at.desc()).limit(10)).scalars().all()
+    latest_event_rows = (
+        db.execute(select(OutreachEvent).order_by(OutreachEvent.created_at.desc()).limit(latest_limit)).scalars().all()
+    )
     latest_events = [event.type for event in latest_event_rows]
     latest_webhook_providers: list[str] = []
     seen_providers: set[str] = set()
@@ -96,6 +99,7 @@ def metrics_summary(
         "webhook_events_by_provider_today": webhook_events_by_provider_today,
         "webhook_event_types_by_provider_today": webhook_event_types_by_provider_today,
         "latest_webhook_providers": latest_webhook_providers,
+        "latest_limit": latest_limit,
         "latest_event_types": list(latest_events),
         "provider_filter": provider_filter,
         "webhook_events_today_for_provider": webhook_events_today_for_provider,

@@ -44,7 +44,7 @@ Local-only path (without containers; requires local Postgres/Redis):
 Health:
 - `GET /healthz`
 - `GET /readyz`
-- `GET /metrics/summary` (includes events-by-type today, webhook provider breakdown, provider/type breakdown, latest webhook providers; optional `provider` query for provider-scoped fields)
+- `GET /metrics/summary` (includes events-by-type today, webhook provider breakdown, provider/type breakdown, latest webhook providers; optional `provider` and `latest_limit` query params)
 
 Leads / audits / issues:
 - `GET /leads`

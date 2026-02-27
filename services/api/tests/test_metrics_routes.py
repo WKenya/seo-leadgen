@@ -153,6 +153,7 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["webhook_events_by_provider_today"], {"sendgrid": 2})
         self.assertEqual(body["webhook_event_types_by_provider_today"], {"sendgrid": {"bounced": 1, "sent": 1}})
         self.assertEqual(body["latest_webhook_providers"], ["sendgrid", "mailgun"])
+        self.assertEqual(body["latest_limit"], 10)
         self.assertIn("sent", body["latest_event_types"])
         self.assertIn("opt_out", body["latest_event_types"])
         self.assertIsNone(body["provider_filter"])
@@ -203,6 +204,32 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["webhook_events_today_for_provider"], 2)
         self.assertEqual(body["webhook_event_types_today_for_provider"], {"bounced": 1, "sent": 1})
         self.assertCountEqual(body["latest_event_types_for_provider"], ["bounced", "sent"])
+
+    def test_metrics_summary_latest_limit_trims_latest_lists(self) -> None:
+        from app.models import Lead, OutreachEvent
+
+        now = datetime.now(timezone.utc)
+        lead = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
+        self.db.add(lead)
+        self.db.commit()
+
+        for i, event_type in enumerate(["sent", "bounced", "opt_out"], start=1):
+            self.db.add(
+                OutreachEvent(
+                    id=uuid4(),
+                    lead_id=lead.id,
+                    type=event_type,
+                    created_at=now - timedelta(seconds=i),
+                    payload={"provider": "sendgrid", "provider_event_id": f"sg-{i}"},
+                )
+            )
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary", params={"latest_limit": 2})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["latest_limit"], 2)
+        self.assertEqual(len(body["latest_event_types"]), 2)
 
 
 if __name__ == "__main__":
