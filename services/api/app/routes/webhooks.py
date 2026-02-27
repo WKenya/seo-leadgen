@@ -396,6 +396,7 @@ async def ingest_outreach_events(
     processed = 0
     duplicates = 0
     rejected: list[dict[str, object]] = []
+    rejected_by_reason: dict[str, int] = {}
     processed_by_type: dict[str, int] = {}
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
@@ -403,7 +404,9 @@ async def ingest_outreach_events(
     for item in body.events:
         event_type = item.event_type.strip().lower()
         if event_type not in allowed:
-            rejected.append({"reason": "invalid_event_type", "event_type": item.event_type})
+            reason = "invalid_event_type"
+            rejected.append({"reason": reason, "event_type": item.event_type})
+            rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
         external_id = item.event_id.strip() if item.event_id else None
         if external_id:
@@ -416,13 +419,15 @@ async def ingest_outreach_events(
         if lead is None and item.email_or_domain:
             lead = _find_lead_by_email_or_domain(db, item.email_or_domain)
         if lead is None:
+            reason = "lead_not_found"
             rejected.append(
                 {
-                    "reason": "lead_not_found",
+                    "reason": reason,
                     "lead_id": str(item.lead_id) if item.lead_id else None,
                     "email_or_domain": item.email_or_domain,
                 }
             )
+            rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
 
         suppression_value = (item.email_or_domain or lead.email or _domain_from_url(lead.website_url) or "").lower()
@@ -463,4 +468,5 @@ async def ingest_outreach_events(
         "processed_by_provider": processed_by_provider,
         "duplicates": duplicates,
         "rejected": rejected,
+        "rejected_by_reason": rejected_by_reason,
     }

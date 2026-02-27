@@ -131,6 +131,7 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["processed_by_type"], {"replied": 1})
         self.assertEqual(body["processed_by_provider"], {})
+        self.assertEqual(body["rejected_by_reason"], {})
 
         refreshed = self.db.get(Lead, lead.id)
         self.assertIsNotNone(refreshed)
@@ -154,8 +155,32 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed_by_type"], {})
         self.assertEqual(body["processed_by_provider"], {})
         self.assertEqual(body["duplicates"], 1)
+        self.assertEqual(body["rejected_by_reason"], {})
         events = self.db.execute(select(OutreachEvent)).scalars().all()
         self.assertEqual(len(events), 1)
+
+    def test_webhook_token_mode_invalid_event_type_tracks_rejected_reason(self) -> None:
+        lead = self._create_lead()
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"events": [{"lead_id": str(lead.id), "event_type": "opened"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["rejected_by_reason"], {"invalid_event_type": 1})
+
+    def test_webhook_token_mode_lead_not_found_tracks_rejected_reason(self) -> None:
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"events": [{"lead_id": str(uuid4()), "event_type": "replied"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["rejected_by_reason"], {"lead_not_found": 1})
 
     def test_webhook_hmac_mode_accepts_signed_request(self) -> None:
         from app.settings import get_settings
