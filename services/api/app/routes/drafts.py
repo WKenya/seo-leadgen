@@ -30,7 +30,15 @@ def list_events(
     page = events[offset : offset + limit]
     items = [OutreachEventRead.from_model(event).model_dump() for event in page]
     count = len(items)
-    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "count": count,
+        "total": total,
+        "has_more": (offset + count) < total,
+        "next_offset": (offset + count) if (offset + count) < total else None,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/drafts")
@@ -47,7 +55,15 @@ def list_drafts(
     drafts = db.execute(base.order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
     count = len(items)
-    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "count": count,
+        "total": total,
+        "has_more": (offset + count) < total,
+        "next_offset": (offset + count) if (offset + count) < total else None,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/drafts/{draft_id}")
@@ -73,7 +89,15 @@ def list_lead_drafts(
     drafts = db.execute(base.order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
     count = len(items)
-    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "count": count,
+        "total": total,
+        "has_more": (offset + count) < total,
+        "next_offset": (offset + count) if (offset + count) < total else None,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/leads/{lead_id}/events")
@@ -99,4 +123,12 @@ def list_lead_events(
     page = events[offset : offset + limit]
     items = [OutreachEventRead.from_model(event).model_dump() for event in page]
     count = len(items)
-    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "count": count,
+        "total": total,
+        "has_more": (offset + count) < total,
+        "next_offset": (offset + count) if (offset + count) < total else None,
+        "limit": limit,
+        "offset": offset,
+    }

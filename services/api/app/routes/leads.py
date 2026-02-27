@@ -35,6 +35,7 @@ def list_leads(
         "count": count,
         "total": total,
         "has_more": (offset + count) < total,
+        "next_offset": (offset + count) if (offset + count) < total else None,
         "status_filter": status,
         "q": q,
         "limit": limit,
@@ -65,7 +66,15 @@ def list_lead_audits(
     audits = db.execute(base.order_by(Audit.started_at.desc()).offset(offset).limit(limit)).scalars().all()
     items = [AuditRead.from_model(audit).model_dump() for audit in audits]
     count = len(items)
-    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "count": count,
+        "total": total,
+        "has_more": (offset + count) < total,
+        "next_offset": (offset + count) if (offset + count) < total else None,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @router.get("/{lead_id}/pipeline")

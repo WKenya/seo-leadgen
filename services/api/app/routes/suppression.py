@@ -24,4 +24,12 @@ def list_suppression(
     rows = db.execute(stmt).scalars().all()
     items = [SuppressionRead.from_model(row).model_dump() for row in rows]
     count = len(items)
-    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
+    return {
+        "items": items,
+        "count": count,
+        "total": total,
+        "has_more": (offset + count) < total,
+        "next_offset": (offset + count) if (offset + count) < total else None,
+        "limit": limit,
+        "offset": offset,
+    }
