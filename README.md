@@ -7,6 +7,7 @@ Current status:
 - Discovery (Google Places), audit (TLS/crawl/Lighthouse stub), drafting, Notion sync task, review/send controls
 
 See `docs/` for product, system, and implementation design.
+Release checklist: `docs/RELEASING.md`.
 
 Python package/runtime manager:
 - `uv` (API + worker)
