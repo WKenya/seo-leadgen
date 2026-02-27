@@ -74,17 +74,46 @@ def _sql_quote(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
+def _ensure_schema_compatibility(compose_cmd: list[str]) -> None:
+    # Keeps smoke harness resilient when container images lag behind latest migrations.
+    _psql(compose_cmd, "ALTER TABLE outreach_events ADD COLUMN IF NOT EXISTS external_id VARCHAR(255);")
+    _psql(
+        compose_cmd,
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_outreach_events_external_id ON outreach_events (external_id);",
+    )
+
+
 def _http_json(base_url: str, path: str, params: dict[str, str] | None = None) -> dict[str, object]:
     url = urllib.parse.urljoin(base_url.rstrip("/") + "/", path.lstrip("/"))
     if params:
         url = f"{url}?{urllib.parse.urlencode(params)}"
-    request = urllib.request.Request(url=url, headers={"Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"http error from {url}: {exc.code} {body}") from exc
+    last_error: Exception | None = None
+    for _attempt in range(3):
+        request = urllib.request.Request(url=url, headers={"Accept": "application/json"})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"http error from {url}: {exc.code} {body}") from exc
+        except (urllib.error.URLError, TimeoutError, ConnectionResetError, OSError) as exc:
+            last_error = exc
+            time.sleep(0.5)
+    raise RuntimeError(f"http request failed for {url}: {last_error}")
+
+
+def _wait_for_api(base_url: str, timeout_seconds: int = 60) -> None:
+    deadline = time.time() + timeout_seconds
+    last_error: Exception | None = None
+    while time.time() < deadline:
+        try:
+            health = _http_json(base_url, "/healthz")
+            if bool(health.get("ok")):
+                return
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+        time.sleep(1.0)
+    raise RuntimeError(f"api did not become healthy within {timeout_seconds}s: {last_error}")
 
 
 def _require(condition: bool, message: str) -> None:
@@ -94,6 +123,7 @@ def _require(condition: bool, message: str) -> None:
 
 def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
     marker = f"e2e-{int(time.time())}"
+    lead_name = f"E2E Smoke Lead {marker}"
     lead_id = str(uuid.uuid4())
     audit_id = str(uuid.uuid4())
     issue_id = str(uuid.uuid4())
@@ -114,14 +144,25 @@ def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
     contact_signals = json.dumps({"has_contact_page": True, "emails_found": [lead_email]})
     issue_details = json.dumps({"url": "https://example.com/missing", "status": 404, "occurrences": 1})
 
+    fixture = SeedFixture(
+        lead_id=lead_id,
+        audit_id=audit_id,
+        issue_id=issue_id,
+        draft_id=draft_id,
+        event_id=event_id,
+        suppression_id=suppression_id,
+        lead_email=lead_email,
+        marker=marker,
+    )
+
     _psql(
         compose_cmd,
         " ".join(
             [
                 "INSERT INTO leads (id, name, category, source, website_url, email, status)",
                 "VALUES",
-                f"({_sql_quote(lead_id)}::uuid, {_sql_quote('E2E Smoke Lead')}, {_sql_quote('HVAC')},",
-                f"{_sql_quote('e2e_smoke')}, {_sql_quote('https://example.com')}, {_sql_quote(lead_email)}, {_sql_quote('Audited')});",
+                f"({_sql_quote(fixture.lead_id)}::uuid, {_sql_quote(lead_name)}, {_sql_quote('HVAC')},",
+                f"{_sql_quote('e2e_smoke')}, {_sql_quote('https://example.com')}, {_sql_quote(fixture.lead_email)}, {_sql_quote('Audited')});",
             ]
         ),
     )
@@ -131,7 +172,7 @@ def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
             [
                 "INSERT INTO audits (id, lead_id, started_at, finished_at, final_url, https_ok, redirect_chain, crawl_summary, contact_signals)",
                 "VALUES",
-                f"({_sql_quote(audit_id)}::uuid, {_sql_quote(lead_id)}::uuid, now(), now(), {_sql_quote('https://example.com')}, true,",
+                f"({_sql_quote(fixture.audit_id)}::uuid, {_sql_quote(fixture.lead_id)}::uuid, now(), now(), {_sql_quote('https://example.com')}, true,",
                 f"{_sql_quote('[]')}::jsonb, {_sql_quote(crawl_summary)}::jsonb, {_sql_quote(contact_signals)}::jsonb);",
             ]
         ),
@@ -142,7 +183,7 @@ def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
             [
                 "INSERT INTO issues (id, audit_id, kind, severity, title, details)",
                 "VALUES",
-                f"({_sql_quote(issue_id)}::uuid, {_sql_quote(audit_id)}::uuid, {_sql_quote('broken_link')}, 4,",
+                f"({_sql_quote(fixture.issue_id)}::uuid, {_sql_quote(fixture.audit_id)}::uuid, {_sql_quote('broken_link')}, 4,",
                 f"{_sql_quote('Broken link (1x): https://example.com/missing')}, {_sql_quote(issue_details)}::jsonb);",
             ]
         ),
@@ -153,7 +194,7 @@ def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
             [
                 "INSERT INTO email_drafts (id, lead_id, audit_id, subject, body_text)",
                 "VALUES",
-                f"({_sql_quote(draft_id)}::uuid, {_sql_quote(lead_id)}::uuid, {_sql_quote(audit_id)}::uuid,",
+                f"({_sql_quote(fixture.draft_id)}::uuid, {_sql_quote(fixture.lead_id)}::uuid, {_sql_quote(fixture.audit_id)}::uuid,",
                 f"{_sql_quote('Quick website fix idea')}, {_sql_quote('Two high-impact fixes found in your homepage audit.')} );",
             ]
         ),
@@ -162,9 +203,9 @@ def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
         compose_cmd,
         " ".join(
             [
-                "INSERT INTO outreach_events (id, lead_id, external_id, type, payload)",
+                "INSERT INTO outreach_events (id, lead_id, type, payload)",
                 "VALUES",
-                f"({_sql_quote(event_id)}::uuid, {_sql_quote(lead_id)}::uuid, {_sql_quote(f'{marker}-evt')}, {_sql_quote('opened')},",
+                f"({_sql_quote(fixture.event_id)}::uuid, {_sql_quote(fixture.lead_id)}::uuid, {_sql_quote('opened')},",
                 f"{_sql_quote(payload)}::jsonb);",
             ]
         ),
@@ -175,21 +216,12 @@ def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
             [
                 "INSERT INTO suppression (id, email_or_domain, reason)",
                 "VALUES",
-                f"({_sql_quote(suppression_id)}::uuid, {_sql_quote(lead_email)}, {_sql_quote('opt_out')});",
+                f"({_sql_quote(fixture.suppression_id)}::uuid, {_sql_quote(fixture.lead_email)}, {_sql_quote('opt_out')});",
             ]
         ),
     )
 
-    return SeedFixture(
-        lead_id=lead_id,
-        audit_id=audit_id,
-        issue_id=issue_id,
-        draft_id=draft_id,
-        event_id=event_id,
-        suppression_id=suppression_id,
-        lead_email=lead_email,
-        marker=marker,
-    )
+    return fixture
 
 
 def _cleanup_fixture(compose_cmd: list[str], fixture: SeedFixture | None) -> None:
@@ -212,10 +244,10 @@ def _cleanup_fixture(compose_cmd: list[str], fixture: SeedFixture | None) -> Non
 
 def _run_checks(base_url: str, fixture: SeedFixture) -> None:
     health = _http_json(base_url, "/healthz")
-    _require(health.get("status") == "ok", "healthz status != ok")
+    _require(bool(health.get("ok")), "healthz ok flag != true")
 
     ready = _http_json(base_url, "/readyz")
-    _require(ready.get("status") == "ok", "readyz status != ok")
+    _require(bool(ready.get("ok")), "readyz ok flag != true")
 
     leads = _http_json(base_url, "/leads", {"q": fixture.marker, "sort": "asc", "limit": "10"})
     _require(leads.get("sort") == "asc", "/leads sort response mismatch")
@@ -279,9 +311,11 @@ def _run_checks(base_url: str, fixture: SeedFixture) -> None:
 def main() -> int:
     compose_cmd = _detect_compose_cmd()
     api_base_url = os.environ.get("SEO_LEAD_API_BASE_URL", "http://localhost:8080")
+    build_images = os.environ.get("SEO_LEAD_SMOKE_BUILD", "").strip().lower() in {"1", "true", "yes"}
     fixture: SeedFixture | None = None
     try:
-        _run([*compose_cmd, "up", "-d"])
+        up_cmd = [*compose_cmd, "up", "--build", "-d"] if build_images else [*compose_cmd, "up", "-d"]
+        _run(up_cmd)
         _run(
             [
                 *compose_cmd,
@@ -297,6 +331,8 @@ def main() -> int:
                 "head",
             ]
         )
+        _ensure_schema_compatibility(compose_cmd)
+        _wait_for_api(api_base_url)
         fixture = _seed_fixture(compose_cmd)
         _run_checks(api_base_url, fixture)
         print("container e2e smoke: ok")

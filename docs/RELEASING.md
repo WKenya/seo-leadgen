@@ -21,6 +21,7 @@
 2. `make standup`
 3. `make smoke`
 4. `make smoke-e2e`
+5. Optional full rebuild during smoke: `SEO_LEAD_SMOKE_BUILD=1 make smoke-e2e`
 
 If `make smoke-e2e` fails with engine-not-ready:
 - Podman:
