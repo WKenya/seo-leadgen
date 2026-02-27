@@ -83,7 +83,7 @@ Notes:
 ## Response shape
 
 - success:
-  - `{"status":"ok","processed":N,"duplicates":N,"rejected":[...]}`
+  - `{"status":"ok","processed":N,"processed_by_type":{"...":N},"processed_by_provider":{"provider":N},"duplicates":N,"rejected":[...]}`
 - rejected items include reason details (for example `invalid_event_type`, `lead_not_found`).
 
 ## Quick smoke curl (shared token mode)

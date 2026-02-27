@@ -127,7 +127,10 @@ class WebhookRouteTests(unittest.TestCase):
             json={"events": [{"lead_id": str(lead.id), "event_type": "replied"}]},
         )
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["processed"], 1)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["processed_by_type"], {"replied": 1})
+        self.assertEqual(body["processed_by_provider"], {})
 
         refreshed = self.db.get(Lead, lead.id)
         self.assertIsNotNone(refreshed)
@@ -148,6 +151,8 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(second.status_code, 200, second.text)
         body = second.json()
         self.assertEqual(body["processed"], 0)
+        self.assertEqual(body["processed_by_type"], {})
+        self.assertEqual(body["processed_by_provider"], {})
         self.assertEqual(body["duplicates"], 1)
         events = self.db.execute(select(OutreachEvent)).scalars().all()
         self.assertEqual(len(events), 1)
@@ -218,7 +223,10 @@ class WebhookRouteTests(unittest.TestCase):
             ],
         )
         self.assertEqual(response.status_code, 200, response.text)
-        self.assertEqual(response.json()["processed"], 1)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["processed_by_type"], {"opt_out": 1})
+        self.assertEqual(body["processed_by_provider"], {"sendgrid": 1})
 
         refreshed = self.db.get(Lead, lead.id)
         self.assertIsNotNone(refreshed)

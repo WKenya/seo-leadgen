@@ -396,6 +396,8 @@ async def ingest_outreach_events(
     processed = 0
     duplicates = 0
     rejected: list[dict[str, object]] = []
+    processed_by_type: dict[str, int] = {}
+    processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
 
     for item in body.events:
@@ -447,6 +449,18 @@ async def ingest_outreach_events(
             )
         )
         processed += 1
+        processed_by_type[event_type] = processed_by_type.get(event_type, 0) + 1
+        if item.provider:
+            provider_value = item.provider.strip().lower()
+            if provider_value:
+                processed_by_provider[provider_value] = processed_by_provider.get(provider_value, 0) + 1
 
     db.commit()
-    return {"status": "ok", "processed": processed, "duplicates": duplicates, "rejected": rejected}
+    return {
+        "status": "ok",
+        "processed": processed,
+        "processed_by_type": processed_by_type,
+        "processed_by_provider": processed_by_provider,
+        "duplicates": duplicates,
+        "rejected": rejected,
+    }

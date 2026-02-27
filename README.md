@@ -77,6 +77,7 @@ Webhooks:
   - optional SendGrid native auth: `X-Twilio-Email-Event-Webhook-Signature` + `X-Twilio-Email-Event-Webhook-Timestamp` via `SENDGRID_WEBHOOK_PUBLIC_KEY`
   - accepts normalized payload (`{"events":[...]}`), SendGrid arrays, Postmark payloads, and Mailgun `event-data` payloads (JSON + form-encoded)
   - provider-adapted events persist canonical provider metadata in `outreach_events.payload` (`provider`, provider event id/name/timestamp)
+  - response includes processing breakdowns: `processed_by_type`, `processed_by_provider`
 
 Webhook setup examples (copy/paste)
 - Generic shared-token mode:
