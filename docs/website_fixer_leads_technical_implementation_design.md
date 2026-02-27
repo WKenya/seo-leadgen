@@ -520,7 +520,7 @@ Integration tests:
 
 ## 16) Milestones (Codex-friendly)
 
-Status note (2026-02-27): checklist reflects current implementation. API route coverage now broad (admin/read/webhook/metrics), webhook provider auth/payload adapters are implemented and documented in `docs/website_fixer_leads_webhooks_integration_guide.md`. Remaining notable gap: full container E2E smoke on a running Docker/Podman engine.
+Status note (2026-02-27): checklist reflects current implementation. API route coverage now broad (admin/read/webhook/metrics), webhook provider auth/payload adapters are implemented and documented in `docs/website_fixer_leads_webhooks_integration_guide.md`. Container E2E smoke harness available via `make smoke-e2e` (requires active Docker/Podman engine).
 
 ### Milestone 1 — Skeleton + infra
 - [x] Repo + uv projects for api/worker

@@ -24,6 +24,7 @@ Container path (Docker/Podman):
 - `make doctor`
 - `make standup`
 - `make smoke`
+- `make smoke-e2e`
 - `make logs`
 
 If `make standup` says Podman engine not ready:
@@ -134,3 +135,4 @@ Notes:
 ## Tests
 
 - `make test`
+- `make smoke-e2e` (requires running Docker/Podman engine)
