@@ -11,6 +11,22 @@ from app.schemas import EmailDraftRead, OutreachEventRead
 router = APIRouter(tags=["drafts"])
 
 
+def _apply_event_filters(
+    base_stmt,  # type: ignore[no-untyped-def]
+    *,
+    event_type: str | None,
+    provider: str | None,
+):
+    stmt = base_stmt
+    if event_type:
+        stmt = stmt.where(OutreachEvent.type == event_type)
+    if provider:
+        provider_value = provider.strip().lower()
+        provider_expr = func.lower(func.coalesce(OutreachEvent.payload["provider"].as_string(), ""))
+        stmt = stmt.where(provider_expr == provider_value)
+    return stmt
+
+
 @router.get("/events")
 def list_events(
     event_type: str | None = Query(default=None),
@@ -20,17 +36,11 @@ def list_events(
     sort: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
+    base = _apply_event_filters(select(OutreachEvent), event_type=event_type, provider=provider)
+    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
     order_column = OutreachEvent.created_at.asc() if sort == "asc" else OutreachEvent.created_at.desc()
-    stmt = select(OutreachEvent).order_by(order_column)
-    if event_type:
-        stmt = stmt.where(OutreachEvent.type == event_type)
-    events = db.execute(stmt).scalars().all()
-    if provider:
-        provider_value = provider.strip().lower()
-        events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
-    total = len(events)
-    page = events[offset : offset + limit]
-    items = [OutreachEventRead.from_model(event).model_dump() for event in page]
+    events = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
+    items = [OutreachEventRead.from_model(event).model_dump() for event in events]
     count = len(items)
     return {
         "items": items,
@@ -122,17 +132,11 @@ def list_lead_events(
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
+    base = _apply_event_filters(select(OutreachEvent).where(OutreachEvent.lead_id == lead_id), event_type=event_type, provider=provider)
+    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
     order_column = OutreachEvent.created_at.asc() if sort == "asc" else OutreachEvent.created_at.desc()
-    stmt = select(OutreachEvent).where(OutreachEvent.lead_id == lead_id).order_by(order_column)
-    if event_type:
-        stmt = stmt.where(OutreachEvent.type == event_type)
-    events = db.execute(stmt).scalars().all()
-    if provider:
-        provider_value = provider.strip().lower()
-        events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
-    total = len(events)
-    page = events[offset : offset + limit]
-    items = [OutreachEventRead.from_model(event).model_dump() for event in page]
+    events = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
+    items = [OutreachEventRead.from_model(event).model_dump() for event in events]
     count = len(items)
     return {
         "items": items,
