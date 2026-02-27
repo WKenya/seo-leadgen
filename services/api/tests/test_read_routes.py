@@ -233,6 +233,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 1)
         self.assertEqual(body["count"], 1)
+        self.assertEqual(body["total"], 2)
+        self.assertFalse(body["has_more"])
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["id"], str(draft_old.id))
 
@@ -250,6 +252,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["limit"], 10)
         self.assertEqual(body["offset"], 0)
         self.assertEqual(body["count"], 1)
+        self.assertEqual(body["total"], 1)
+        self.assertFalse(body["has_more"])
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["type"], "sent")
 
@@ -269,6 +273,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["limit"], 10)
         self.assertEqual(body["offset"], 0)
         self.assertEqual(body["count"], 1)
+        self.assertEqual(body["total"], 1)
+        self.assertFalse(body["has_more"])
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["payload"]["provider"], "postmark")
         self.assertEqual(body["items"][0]["provider"], "postmark")
@@ -293,6 +299,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 1)
         self.assertEqual(body["count"], 1)
+        self.assertEqual(body["total"], 3)
+        self.assertTrue(body["has_more"])
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["type"], "opt_out")
 
@@ -302,6 +310,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(lead_body["limit"], 1)
         self.assertEqual(lead_body["offset"], 1)
         self.assertEqual(lead_body["count"], 1)
+        self.assertEqual(lead_body["total"], 2)
+        self.assertFalse(lead_body["has_more"])
         self.assertEqual(len(lead_body["items"]), 1)
         self.assertEqual(lead_body["items"][0]["type"], "approved")
 
@@ -313,6 +323,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["limit"], 1)
         self.assertEqual(body["offset"], 0)
         self.assertEqual(body["count"], 1)
+        self.assertEqual(body["total"], 1)
+        self.assertFalse(body["has_more"])
         self.assertEqual(len(body["items"]), 1)
         self.assertEqual(body["items"][0]["email_or_domain"], "owner@acme.example")
 
@@ -322,6 +334,8 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body2["limit"], 1)
         self.assertEqual(body2["offset"], 1)
         self.assertEqual(body2["count"], 1)
+        self.assertEqual(body2["total"], 2)
+        self.assertFalse(body2["has_more"])
         self.assertEqual(len(body2["items"]), 1)
         self.assertEqual(body2["items"][0]["email_or_domain"], "bravo.example")
 

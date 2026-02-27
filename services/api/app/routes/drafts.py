@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -26,9 +26,11 @@ def list_events(
     if provider:
         provider_value = provider.strip().lower()
         events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
-    events = events[offset : offset + limit]
-    items = [OutreachEventRead.from_model(event).model_dump() for event in events]
-    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
+    total = len(events)
+    page = events[offset : offset + limit]
+    items = [OutreachEventRead.from_model(event).model_dump() for event in page]
+    count = len(items)
+    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
 
 
 @router.get("/drafts")
@@ -38,12 +40,14 @@ def list_drafts(
     offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    stmt = select(EmailDraft).order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)
+    base = select(EmailDraft)
     if lead_id is not None:
-        stmt = stmt.where(EmailDraft.lead_id == lead_id)
-    drafts = db.execute(stmt).scalars().all()
+        base = base.where(EmailDraft.lead_id == lead_id)
+    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    drafts = db.execute(base.order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
-    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
+    count = len(items)
+    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
 
 
 @router.get("/drafts/{draft_id}")
@@ -64,19 +68,12 @@ def list_lead_drafts(
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
-    drafts = (
-        db.execute(
-            select(EmailDraft)
-            .where(EmailDraft.lead_id == lead_id)
-            .order_by(EmailDraft.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-        )
-        .scalars()
-        .all()
-    )
+    base = select(EmailDraft).where(EmailDraft.lead_id == lead_id)
+    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    drafts = db.execute(base.order_by(EmailDraft.created_at.desc()).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
-    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
+    count = len(items)
+    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
 
 
 @router.get("/leads/{lead_id}/events")
@@ -98,6 +95,8 @@ def list_lead_events(
     if provider:
         provider_value = provider.strip().lower()
         events = [event for event in events if str((event.payload or {}).get("provider") or "").lower() == provider_value]
-    events = events[offset : offset + limit]
-    items = [OutreachEventRead.from_model(event).model_dump() for event in events]
-    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
+    total = len(events)
+    page = events[offset : offset + limit]
+    items = [OutreachEventRead.from_model(event).model_dump() for event in page]
+    count = len(items)
+    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}

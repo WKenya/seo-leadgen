@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -19,17 +19,22 @@ def list_leads(
     offset: int = Query(default=0, ge=0, le=5000),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
-    stmt = select(Lead).order_by(Lead.created_at.desc()).offset(offset).limit(limit)
+    base = select(Lead)
     if status:
-        stmt = stmt.where(Lead.status == status)
+        base = base.where(Lead.status == status)
     if q:
         like = f"%{q}%"
-        stmt = stmt.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)))
+        base = base.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)))
+    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    stmt = base.order_by(Lead.created_at.desc()).offset(offset).limit(limit)
     leads = db.execute(stmt).scalars().all()
     items = [LeadRead.from_model(lead).model_dump() for lead in leads]
+    count = len(items)
     return {
         "items": items,
-        "count": len(items),
+        "count": count,
+        "total": total,
+        "has_more": (offset + count) < total,
         "status_filter": status,
         "q": q,
         "limit": limit,
@@ -55,15 +60,12 @@ def list_lead_audits(
     lead = db.get(Lead, lead_id)
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
-    audits = (
-        db.execute(
-            select(Audit).where(Audit.lead_id == lead_id).order_by(Audit.started_at.desc()).offset(offset).limit(limit)
-        )
-        .scalars()
-        .all()
-    )
+    base = select(Audit).where(Audit.lead_id == lead_id)
+    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    audits = db.execute(base.order_by(Audit.started_at.desc()).offset(offset).limit(limit)).scalars().all()
     items = [AuditRead.from_model(audit).model_dump() for audit in audits]
-    return {"items": items, "count": len(items), "limit": limit, "offset": offset}
+    count = len(items)
+    return {"items": items, "count": count, "total": total, "has_more": (offset + count) < total, "limit": limit, "offset": offset}
 
 
 @router.get("/{lead_id}/pipeline")
