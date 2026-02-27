@@ -22,6 +22,7 @@ class Lead(Base):
     source: Mapped[str | None] = mapped_column(Text, nullable=True)
     place_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     website_url: Mapped[str] = mapped_column(Text)
+    website_domain: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     phone: Mapped[str | None] = mapped_column(Text, nullable=True)
     email: Mapped[str | None] = mapped_column(Text, nullable=True)

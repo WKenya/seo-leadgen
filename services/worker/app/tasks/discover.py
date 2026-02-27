@@ -11,8 +11,10 @@ from app.settings import get_settings
 from app.worker import celery_app
 
 
-def _domain(url: str) -> str:
-    return urlparse(url).netloc.lower()
+def _domain(url: str | None) -> str | None:
+    if not url:
+        return None
+    return urlparse(url).netloc.lower() or None
 
 
 def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | None:
@@ -20,9 +22,13 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
     if lead is not None:
         return lead
 
-    # Fallback dedupe by domain until we add a persisted normalized-domain column.
     target_domain = _domain(website_url)
-    for candidate in session.execute(select(Lead).where(Lead.website_url.is_not(None))).scalars():
+    if target_domain:
+        lead = session.execute(select(Lead).where(Lead.website_domain == target_domain)).scalar_one_or_none()
+        if lead is not None:
+            return lead
+
+    for candidate in session.execute(select(Lead).where(Lead.website_domain.is_(None), Lead.website_url.is_not(None))).scalars():
         if _domain(candidate.website_url) == target_domain:
             return candidate
     return None
@@ -59,7 +65,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
     with SessionLocal() as session:
         suppression_values = _suppression_values(session)
         for item in discovered:
-            lead_domain = _domain(item.website_url)
+            lead_domain = _domain(item.website_url) or ""
             is_suppressed = lead_domain in suppression_values
             lead = _find_existing_lead(
                 session,
@@ -73,6 +79,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                     source="google_places",
                     place_id=item.place_id,
                     website_url=item.website_url,
+                    website_domain=lead_domain or None,
                     address=item.address,
                     phone=item.phone,
                     status="Suppressed" if is_suppressed else "Discovered",
@@ -92,6 +99,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                 "source": "google_places",
                 "place_id": item.place_id,
                 "website_url": item.website_url,
+                "website_domain": lead_domain or None,
                 "address": item.address,
                 "phone": item.phone,
             }.items():

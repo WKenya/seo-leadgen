@@ -225,6 +225,7 @@ Gmail drafts (if using Gmail API):
 - `source` text
 - `place_id` text nullable
 - `website_url` text
+- `website_domain` text nullable (normalized lowercase domain for fast dedupe/matching)
 - `address` text nullable
 - `phone` text nullable
 - `email` text nullable

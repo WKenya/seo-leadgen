@@ -46,6 +46,8 @@ class AuditBatchRequest(BaseModel):
 def _lead_suppression_key(lead: Lead) -> str | None:
     if lead.email:
         return lead.email.lower()
+    if lead.website_domain:
+        return lead.website_domain.lower()
     if lead.website_url:
         return urlparse(lead.website_url).netloc.lower() or None
     return None
@@ -55,7 +57,7 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
     keys: list[str] = []
     if lead.email:
         keys.append(lead.email.lower())
-    domain = urlparse(lead.website_url).netloc.lower() if lead.website_url else None
+    domain = (lead.website_domain or "").lower() or (urlparse(lead.website_url).netloc.lower() if lead.website_url else None)
     if domain:
         keys.append(domain)
     if not keys:

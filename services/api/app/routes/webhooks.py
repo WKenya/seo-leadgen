@@ -151,7 +151,10 @@ def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
     lead = db.execute(select(Lead).where(Lead.email == normalized)).scalar_one_or_none()
     if lead is not None:
         return lead
-    for candidate in db.execute(select(Lead).where(Lead.website_url.is_not(None))).scalars():
+    lead = db.execute(select(Lead).where(Lead.website_domain == normalized)).scalar_one_or_none()
+    if lead is not None:
+        return lead
+    for candidate in db.execute(select(Lead).where(Lead.website_domain.is_(None), Lead.website_url.is_not(None))).scalars():
         if _domain_from_url(candidate.website_url) == normalized:
             return candidate
     return None
@@ -431,7 +434,9 @@ async def ingest_outreach_events(
             continue
 
         provider_value = (item.provider or "").strip().lower() or None
-        suppression_value = (item.email_or_domain or lead.email or _domain_from_url(lead.website_url) or "").lower()
+        suppression_value = (
+            item.email_or_domain or lead.email or lead.website_domain or _domain_from_url(lead.website_url) or ""
+        ).lower()
         if event_type in {"bounced", "opt_out"} and suppression_value:
             _upsert_suppression(db, value=suppression_value, reason=event_type)
             lead.status = "Suppressed"
