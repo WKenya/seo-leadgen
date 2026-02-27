@@ -225,6 +225,41 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["latest_limit"], 2)
         self.assertEqual(len(body["latest_event_types"]), 2)
 
+    def test_metrics_summary_provider_filter_uses_provider_scoped_latest_query(self) -> None:
+        from app.models import Lead, OutreachEvent
+
+        now = datetime.now(timezone.utc)
+        lead = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
+        self.db.add(lead)
+        self.db.commit()
+
+        self.db.add_all(
+            [
+                OutreachEvent(
+                    id=uuid4(),
+                    lead_id=lead.id,
+                    type="sent",
+                    created_at=now - timedelta(minutes=2),
+                    payload={"provider": "sendgrid", "provider_event_id": "sg-1"},
+                ),
+                OutreachEvent(
+                    id=uuid4(),
+                    lead_id=lead.id,
+                    type="bounced",
+                    created_at=now - timedelta(minutes=1),
+                    payload={"provider": "postmark", "provider_event_id": "pm-1"},
+                ),
+            ]
+        )
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary", params={"provider": "sendgrid", "latest_limit": 1})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["latest_limit"], 1)
+        self.assertEqual(body["latest_event_types"], ["bounced"])
+        self.assertEqual(body["latest_event_types_for_provider"], ["sent"])
+
 
 if __name__ == "__main__":
     unittest.main()

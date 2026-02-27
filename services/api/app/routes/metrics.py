@@ -66,14 +66,16 @@ def metrics_summary(
         provider_bucket = webhook_event_types_by_provider_today.setdefault(provider_key, {})
         provider_bucket[str(event_type)] = int(count)
 
-    latest_event_rows = (
-        db.execute(select(OutreachEvent).order_by(OutreachEvent.created_at.desc()).limit(latest_limit)).scalars().all()
-    )
-    latest_events = [event.type for event in latest_event_rows]
+    latest_event_rows = db.execute(
+        select(OutreachEvent.type, provider_column.label("provider"))
+        .order_by(OutreachEvent.created_at.desc())
+        .limit(latest_limit)
+    ).all()
+    latest_events = [event_type for event_type, _provider in latest_event_rows]
     latest_webhook_providers: list[str] = []
     seen_providers: set[str] = set()
-    for event in latest_event_rows:
-        provider = str((event.payload or {}).get("provider") or "").strip().lower()
+    for _event_type, provider_name in latest_event_rows:
+        provider = str(provider_name or "").strip().lower()
         if not provider or provider in seen_providers:
             continue
         latest_webhook_providers.append(provider)
@@ -99,9 +101,13 @@ def metrics_summary(
             str(event_type): int(count) for event_type, count in provider_type_filtered_rows
         }
         latest_event_types_for_provider = [
-            event.type
-            for event in latest_event_rows
-            if str((event.payload or {}).get("provider") or "").strip().lower() == provider_filter
+            event_type
+            for event_type, in db.execute(
+                select(OutreachEvent.type)
+                .where(provider_column == provider_filter)
+                .order_by(OutreachEvent.created_at.desc())
+                .limit(latest_limit)
+            ).all()
         ]
 
     return {
