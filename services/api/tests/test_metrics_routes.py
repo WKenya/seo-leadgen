@@ -149,8 +149,10 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["drafts_approved"], 1)
         self.assertEqual(body["drafts_sent_today"], 1)
         self.assertEqual(body["events_today"], 2)
+        self.assertEqual(body["events_today_by_type"], {"bounced": 1, "sent": 1})
         self.assertEqual(body["webhook_events_by_provider_today"], {"sendgrid": 2})
         self.assertEqual(body["webhook_event_types_by_provider_today"], {"sendgrid": {"bounced": 1, "sent": 1}})
+        self.assertEqual(body["latest_webhook_providers"], ["sendgrid", "mailgun"])
         self.assertIn("sent", body["latest_event_types"])
         self.assertIn("opt_out", body["latest_event_types"])
 
