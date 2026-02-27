@@ -430,6 +430,7 @@ async def ingest_outreach_events(
             rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
 
+        provider_value = (item.provider or "").strip().lower() or None
         suppression_value = (item.email_or_domain or lead.email or _domain_from_url(lead.website_url) or "").lower()
         if event_type in {"bounced", "opt_out"} and suppression_value:
             _upsert_suppression(db, value=suppression_value, reason=event_type)
@@ -441,11 +442,12 @@ async def ingest_outreach_events(
             OutreachEvent(
                 lead_id=lead.id,
                 external_id=external_id,
+                provider=provider_value,
                 type=event_type,
                 payload={
                     "source": "webhook",
-                    "provider": item.provider,
-                    "provider_event_id": external_id if item.provider else None,
+                    "provider": provider_value,
+                    "provider_event_id": external_id if provider_value else None,
                     "provider_event_name": item.provider_event_name,
                     "provider_event_at": item.provider_event_at,
                     "email_or_domain": suppression_value or None,
@@ -455,10 +457,8 @@ async def ingest_outreach_events(
         )
         processed += 1
         processed_by_type[event_type] = processed_by_type.get(event_type, 0) + 1
-        if item.provider:
-            provider_value = item.provider.strip().lower()
-            if provider_value:
-                processed_by_provider[provider_value] = processed_by_provider.get(provider_value, 0) + 1
+        if provider_value:
+            processed_by_provider[provider_value] = processed_by_provider.get(provider_value, 0) + 1
 
     db.commit()
     return {

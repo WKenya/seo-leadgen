@@ -13,7 +13,7 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 
 def _provider_expr():
-    return func.lower(func.coalesce(OutreachEvent.payload["provider"].as_string(), ""))
+    return func.coalesce(OutreachEvent.provider, "")
 
 
 @router.get("/summary")

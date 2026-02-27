@@ -150,6 +150,7 @@ class ReadRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead1.id,
             type="approved",
+            provider="sendgrid",
             payload={"draft_id": str(draft_old.id), "provider": "sendgrid", "provider_event_id": "sg-1"},
             created_at=now - timedelta(minutes=10),
         )
@@ -157,6 +158,7 @@ class ReadRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead1.id,
             type="sent",
+            provider="mailgun",
             payload={"draft_id": str(draft_new.id), "provider": "mailgun", "provider_event_id": "mg-1"},
             created_at=now - timedelta(minutes=1),
         )
@@ -164,6 +166,7 @@ class ReadRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead2.id,
             type="opt_out",
+            provider="postmark",
             payload={"provider": "postmark", "provider_event_id": "pm-1"},
             created_at=now - timedelta(minutes=2),
         )

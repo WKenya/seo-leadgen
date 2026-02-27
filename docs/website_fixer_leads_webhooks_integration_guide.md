@@ -62,6 +62,7 @@ Notes:
 
 - Optional incoming `event_id` maps to `outreach_events.external_id` (idempotency key).
 - Duplicate `event_id` is skipped and counted in response `duplicates`.
+- Provider value is normalized to lowercase and persisted in `outreach_events.provider` (indexed for read/metrics filters).
 - Provider-adapted events store canonical metadata in `outreach_events.payload`:
   - `provider`
   - `provider_event_id`

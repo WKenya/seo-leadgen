@@ -77,6 +77,7 @@ def _sql_quote(value: str) -> str:
 def _ensure_schema_compatibility(compose_cmd: list[str]) -> None:
     # Keeps smoke harness resilient when container images lag behind latest migrations.
     _psql(compose_cmd, "ALTER TABLE outreach_events ADD COLUMN IF NOT EXISTS external_id VARCHAR(255);")
+    _psql(compose_cmd, "ALTER TABLE outreach_events ADD COLUMN IF NOT EXISTS provider VARCHAR(64);")
     _psql(
         compose_cmd,
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_outreach_events_external_id ON outreach_events (external_id);",
@@ -226,9 +227,9 @@ def _seed_fixture(compose_cmd: list[str]) -> SeedFixture:
         compose_cmd,
         " ".join(
             [
-                "INSERT INTO outreach_events (id, lead_id, type, payload)",
+                "INSERT INTO outreach_events (id, lead_id, provider, type, payload)",
                 "VALUES",
-                f"({_sql_quote(fixture.event_id)}::uuid, {_sql_quote(fixture.lead_id)}::uuid, {_sql_quote('opened')},",
+                f"({_sql_quote(fixture.event_id)}::uuid, {_sql_quote(fixture.lead_id)}::uuid, {_sql_quote('mailgun')}, {_sql_quote('opened')},",
                 f"{_sql_quote(payload)}::jsonb);",
             ]
         ),

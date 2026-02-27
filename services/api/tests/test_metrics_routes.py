@@ -111,6 +111,7 @@ class MetricsRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead1.id,
             type="sent",
+            provider="sendgrid",
             created_at=now,
             payload={"provider": "sendgrid", "provider_event_id": "sg-1"},
         )
@@ -118,6 +119,7 @@ class MetricsRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead1.id,
             type="bounced",
+            provider="sendgrid",
             created_at=now,
             payload={"provider": "sendgrid", "provider_event_id": "sg-2"},
         )
@@ -125,6 +127,7 @@ class MetricsRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead2.id,
             type="opt_out",
+            provider="mailgun",
             created_at=yesterday,
             payload={"provider": "mailgun", "provider_event_id": "mg-1"},
         )
@@ -171,6 +174,7 @@ class MetricsRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead1.id,
             type="sent",
+            provider="sendgrid",
             created_at=now,
             payload={"provider": "sendgrid", "provider_event_id": "sg-1"},
         )
@@ -178,6 +182,7 @@ class MetricsRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead1.id,
             type="bounced",
+            provider="sendgrid",
             created_at=now,
             payload={"provider": "sendgrid", "provider_event_id": "sg-2"},
         )
@@ -185,6 +190,7 @@ class MetricsRouteTests(unittest.TestCase):
             id=uuid4(),
             lead_id=lead2.id,
             type="opt_out",
+            provider="mailgun",
             created_at=yesterday,
             payload={"provider": "mailgun", "provider_event_id": "mg-1"},
         )
@@ -213,6 +219,7 @@ class MetricsRouteTests(unittest.TestCase):
                     id=uuid4(),
                     lead_id=lead.id,
                     type=event_type,
+                    provider="sendgrid",
                     created_at=now - timedelta(seconds=i),
                     payload={"provider": "sendgrid", "provider_event_id": f"sg-{i}"},
                 )
@@ -239,6 +246,7 @@ class MetricsRouteTests(unittest.TestCase):
                     id=uuid4(),
                     lead_id=lead.id,
                     type="sent",
+                    provider="sendgrid",
                     created_at=now - timedelta(minutes=2),
                     payload={"provider": "sendgrid", "provider_event_id": "sg-1"},
                 ),
@@ -246,6 +254,7 @@ class MetricsRouteTests(unittest.TestCase):
                     id=uuid4(),
                     lead_id=lead.id,
                     type="bounced",
+                    provider="postmark",
                     created_at=now - timedelta(minutes=1),
                     payload={"provider": "postmark", "provider_event_id": "pm-1"},
                 ),

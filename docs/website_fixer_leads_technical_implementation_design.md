@@ -268,6 +268,8 @@ Gmail drafts (if using Gmail API):
 **outreach_events**
 - `id` UUID PK
 - `lead_id` FK
+- `external_id` text nullable unique (provider idempotency key)
+- `provider` text nullable (normalized lowercase provider slug)
 - `type` text (drafted/approved/sent/bounced/replied/opt_out)
 - `payload` jsonb
 - `created_at`
