@@ -155,6 +155,54 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["latest_webhook_providers"], ["sendgrid", "mailgun"])
         self.assertIn("sent", body["latest_event_types"])
         self.assertIn("opt_out", body["latest_event_types"])
+        self.assertIsNone(body["provider_filter"])
+        self.assertIsNone(body["webhook_events_today_for_provider"])
+        self.assertIsNone(body["webhook_event_types_today_for_provider"])
+        self.assertIsNone(body["latest_event_types_for_provider"])
+
+    def test_metrics_summary_provider_filter_returns_provider_scoped_fields(self) -> None:
+        from app.models import Audit, EmailDraft, Lead, OutreachEvent
+
+        now = datetime.now(timezone.utc)
+        yesterday = now - timedelta(days=1)
+
+        lead1 = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
+        lead2 = Lead(id=uuid4(), name="B", source="x", website_url="https://b.example", status="Suppressed")
+        audit1 = Audit(id=uuid4(), lead_id=lead1.id, final_url=lead1.website_url)
+        audit2 = Audit(id=uuid4(), lead_id=lead2.id, final_url=lead2.website_url)
+        draft1 = EmailDraft(id=uuid4(), lead_id=lead1.id, audit_id=audit1.id, subject="d1", body_text="x")
+        draft2 = EmailDraft(id=uuid4(), lead_id=lead2.id, audit_id=audit2.id, subject="d2", body_text="x")
+        event1 = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="sent",
+            created_at=now,
+            payload={"provider": "sendgrid", "provider_event_id": "sg-1"},
+        )
+        event2 = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="bounced",
+            created_at=now,
+            payload={"provider": "sendgrid", "provider_event_id": "sg-2"},
+        )
+        event3 = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead2.id,
+            type="opt_out",
+            created_at=yesterday,
+            payload={"provider": "mailgun", "provider_event_id": "mg-1"},
+        )
+        self.db.add_all([lead1, lead2, audit1, audit2, draft1, draft2, event1, event2, event3])
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary", params={"provider": "sendgrid"})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["provider_filter"], "sendgrid")
+        self.assertEqual(body["webhook_events_today_for_provider"], 2)
+        self.assertEqual(body["webhook_event_types_today_for_provider"], {"bounced": 1, "sent": 1})
+        self.assertCountEqual(body["latest_event_types_for_provider"], ["bounced", "sent"])
 
 
 if __name__ == "__main__":

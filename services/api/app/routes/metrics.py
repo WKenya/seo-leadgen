@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -13,10 +13,14 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 
 @router.get("/summary")
-def metrics_summary(db: Session = Depends(get_db)) -> dict[str, object]:
+def metrics_summary(
+    provider: str | None = Query(default=None, description="Optional webhook provider filter, e.g. sendgrid|mailgun|postmark"),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
     now = datetime.now(timezone.utc)
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     end = start + timedelta(days=1)
+    provider_filter = (provider or "").strip().lower() or None
 
     status_rows = db.execute(select(Lead.status, func.count()).group_by(Lead.status).order_by(Lead.status)).all()
     leads_by_status = {str(status or "Unknown"): int(count) for status, count in status_rows}
@@ -62,6 +66,25 @@ def metrics_summary(db: Session = Depends(get_db)) -> dict[str, object]:
             continue
         latest_webhook_providers.append(provider)
         seen_providers.add(provider)
+
+    webhook_events_today_for_provider: int | None = None
+    webhook_event_types_today_for_provider: dict[str, int] | None = None
+    latest_event_types_for_provider: list[str] | None = None
+    if provider_filter:
+        filtered_today = [
+            event for event in event_rows_today if str((event.payload or {}).get("provider") or "").strip().lower() == provider_filter
+        ]
+        webhook_events_today_for_provider = len(filtered_today)
+        provider_types: dict[str, int] = {}
+        for event in filtered_today:
+            provider_types[event.type] = provider_types.get(event.type, 0) + 1
+        webhook_event_types_today_for_provider = provider_types
+        latest_event_types_for_provider = [
+            event.type
+            for event in latest_event_rows
+            if str((event.payload or {}).get("provider") or "").strip().lower() == provider_filter
+        ]
+
     return {
         "as_of": now.isoformat(),
         "leads_by_status": leads_by_status,
@@ -74,4 +97,8 @@ def metrics_summary(db: Session = Depends(get_db)) -> dict[str, object]:
         "webhook_event_types_by_provider_today": webhook_event_types_by_provider_today,
         "latest_webhook_providers": latest_webhook_providers,
         "latest_event_types": list(latest_events),
+        "provider_filter": provider_filter,
+        "webhook_events_today_for_provider": webhook_events_today_for_provider,
+        "webhook_event_types_today_for_provider": webhook_event_types_today_for_provider,
+        "latest_event_types_for_provider": latest_event_types_for_provider,
     }
