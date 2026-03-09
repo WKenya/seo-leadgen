@@ -43,6 +43,23 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(found.id, lead.id)
 
+    def test_find_existing_lead_by_place_id_with_legacy_whitespace(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            source="google_places",
+            place_id="  place-123  ",
+            website_url="",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        found = _find_existing_lead(self.session, place_id="place-123", website_url="")
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, lead.id)
+
     def test_find_existing_lead_falls_back_when_website_domain_missing(self) -> None:
         lead = Lead(
             id=uuid4(),

@@ -18,9 +18,13 @@ def _domain(url: str | None) -> str | None:
 
 
 def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | None:
-    lead = session.execute(select(Lead).where(Lead.place_id == place_id)).scalar_one_or_none()
-    if lead is not None:
-        return lead
+    normalized_place_id = (place_id or "").strip()
+    if normalized_place_id:
+        lead = session.execute(
+            select(Lead).where(func.trim(func.coalesce(Lead.place_id, "")) == normalized_place_id)
+        ).scalar_one_or_none()
+        if lead is not None:
+            return lead
 
     target_domain = _domain(website_url)
     if not target_domain:
