@@ -70,7 +70,10 @@ def _verify_webhook_hmac(body: bytes, signature: str | None, timestamp_header: s
 def _extract_mailgun_signature_fields(raw_body: bytes, *, content_type: str | None) -> tuple[str, str, str] | None:
     content_type_value = (content_type or "").split(";", 1)[0].strip().lower()
     if content_type_value == "application/x-www-form-urlencoded":
-        parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+        try:
+            parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+        except UnicodeDecodeError:
+            return None
         ts = (parsed.get("signature[timestamp]") or parsed.get("timestamp") or [None])[0]
         token = (parsed.get("signature[token]") or parsed.get("token") or [None])[0]
         sig = (parsed.get("signature[signature]") or parsed.get("signature") or [None])[0]
@@ -302,7 +305,10 @@ def _normalize_mailgun_event(raw_event_data: dict[str, object]) -> OutreachWebho
 
 
 def _parse_form_encoded_body(raw_body: bytes) -> OutreachWebhookRequest:
-    parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+    try:
+        parsed = parse_qs(raw_body.decode("utf-8"), keep_blank_values=True)
+    except UnicodeDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"invalid_body: {exc}") from exc
     if not (parsed.get("event-data") or parsed.get("event_data")):
         if parsed.get("event"):
             legacy_event: dict[str, object] = {}

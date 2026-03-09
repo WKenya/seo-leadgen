@@ -213,6 +213,18 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 0)
         self.assertEqual(body["rejected_by_reason"], {"invalid_event_type": 1})
 
+    def test_webhook_form_payload_with_invalid_utf8_returns_400(self) -> None:
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={
+                "X-Webhook-Token": "test_shared_secret",
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            content=b"\xff\xfe",
+        )
+        self.assertEqual(response.status_code, 400, response.text)
+        self.assertIn("invalid_body", response.text)
+
     def test_webhook_token_mode_lead_not_found_tracks_rejected_reason(self) -> None:
         response = self.client.post(
             "/webhooks/outreach-events",
