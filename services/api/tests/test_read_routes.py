@@ -351,7 +351,32 @@ class ReadRouteTests(unittest.TestCase):
         response = self.client.get("/events", params={"provider": "mailgun", "limit": 20, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         items = response.json()["items"]
-        self.assertTrue(any(item["id"] == str(legacy_event.id) for item in items))
+        matching = [item for item in items if item["id"] == str(legacy_event.id)]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["provider"], "mailgun")
+
+    def test_list_events_normalizes_provider_from_payload_when_column_missing(self) -> None:
+        from app.models import OutreachEvent
+
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+        legacy_event = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="manual",
+            provider=None,
+            payload={"provider": "  SeNdGrId  ", "provider_event_id": "sg-payload-1"},
+            created_at=datetime.now(timezone.utc),
+        )
+        self.db.add(legacy_event)
+        self.db.commit()
+
+        response = self.client.get("/events", params={"limit": 20, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        items = response.json()["items"]
+        matching = [item for item in items if item["id"] == str(legacy_event.id)]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["provider"], "sendgrid")
 
     def test_list_events_ignores_blank_provider_and_event_type_filters(self) -> None:
         self._seed_lead_bundle()
