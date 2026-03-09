@@ -141,6 +141,7 @@ Notes:
 - artifacts Basic auth scheme is case-insensitive (`basic` and `Basic` both accepted)
 - artifacts route returns `503 artifact_auth_not_configured` when only one of `ARTIFACTS_BASIC_AUTH_USER/PASS` is set
 - webhook lead lookup trims stored `leads.email` / `leads.website_domain` for legacy whitespace rows
+- admin/webhook/discover/summarize domain fallback parsing trims `website_url` first, so whitespace-padded legacy URLs still match
 - webhook duplicate-event detection trims stored `outreach_events.external_id` for legacy whitespace rows
 - discover task domain/suppression matching trims and lowercases legacy stored values
 - discover lead matching trims stored `place_id` values for legacy whitespace rows
