@@ -24,8 +24,10 @@ def _lead_domain(website_url: str | None) -> str | None:
 def _is_suppressed(session, lead: Lead) -> bool:
     values = []
     if lead.email:
-        values.append(lead.email.strip().lower())
-    domain = _lead_domain(lead.website_url)
+        normalized_email = lead.email.strip().lower()
+        if normalized_email:
+            values.append(normalized_email)
+    domain = (lead.website_domain or "").strip().lower() or _lead_domain(lead.website_url)
     if domain:
         values.append(domain)
     if not values:
