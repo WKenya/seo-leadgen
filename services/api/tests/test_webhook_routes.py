@@ -364,6 +364,24 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row.email_or_domain, "owner@acme.example")
 
+    def test_webhook_token_mode_resolves_lead_email_with_legacy_whitespace(self) -> None:
+        from app.models import Suppression
+
+        lead = self._create_lead(email="  Owner@Acme.Example  ")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json=[{"email": "owner@acme.example", "event": "unsubscribe", "sg_event_id": "sg-space-1"}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        refreshed = self.db.get(type(lead), lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.email_or_domain, "owner@acme.example")
+
     def test_webhook_token_mode_accepts_sendgrid_dropped_event_as_bounced(self) -> None:
         from app.models import Lead, Suppression
 

@@ -161,10 +161,14 @@ def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
     normalized = _normalize_email_or_domain(value)
     if not normalized:
         return None
-    lead = db.execute(select(Lead).where(func.lower(Lead.email) == normalized)).scalar_one_or_none()
+    lead = db.execute(
+        select(Lead).where(func.lower(func.trim(func.coalesce(Lead.email, ""))) == normalized)
+    ).scalar_one_or_none()
     if lead is not None:
         return lead
-    lead = db.execute(select(Lead).where(func.lower(Lead.website_domain) == normalized)).scalar_one_or_none()
+    lead = db.execute(
+        select(Lead).where(func.lower(func.trim(func.coalesce(Lead.website_domain, ""))) == normalized)
+    ).scalar_one_or_none()
     if lead is not None:
         return lead
     for candidate in db.execute(select(Lead).where(Lead.website_domain.is_(None), Lead.website_url.is_not(None))).scalars():
