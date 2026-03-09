@@ -17,7 +17,8 @@ def _domain(url: str | None) -> str | None:
     normalized_url = url.strip()
     if not normalized_url:
         return None
-    return urlparse(normalized_url).netloc.strip().lower() or None
+    parsed = urlparse(normalized_url if "://" in normalized_url else f"https://{normalized_url}")
+    return parsed.netloc.strip().lower() or None
 
 
 def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | None:

@@ -92,6 +92,22 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(found.id, lead.id)
 
+    def test_find_existing_lead_matches_schemeless_website_url(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Legacy URL Schemeless",
+            source="google_places",
+            website_url="legacy.example/home",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        found = _find_existing_lead(self.session, place_id="new-place", website_url="legacy.example/contact")
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, lead.id)
+
     def test_find_existing_lead_does_not_fallback_match_when_target_domain_missing(self) -> None:
         lead = Lead(
             id=uuid4(),
