@@ -182,6 +182,31 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["rejected_by_reason"], {})
 
+    def test_webhook_token_mode_resolves_lead_by_whitespace_padded_website_url(self) -> None:
+        from app.models import Lead
+
+        lead = Lead(
+            id=uuid4(),
+            name="URL Match",
+            category="HVAC",
+            source="google_places",
+            website_url="  https://acme.example/path  ",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"events": [{"email_or_domain": "acme.example", "event_type": "replied", "event_id": "evt-url-1"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["rejected_by_reason"], {})
+
     def test_webhook_duplicate_event_id_is_counted_and_not_reinserted(self) -> None:
         from app.models import OutreachEvent
 

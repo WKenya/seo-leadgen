@@ -146,7 +146,10 @@ def _verify_sendgrid_webhook_signature(
 def _domain_from_url(url: str | None) -> str | None:
     if not url:
         return None
-    domain = urlparse(url).netloc.strip().lower()
+    normalized_url = url.strip()
+    if not normalized_url:
+        return None
+    domain = urlparse(normalized_url).netloc.strip().lower()
     return domain or None
 
 

@@ -18,7 +18,10 @@ from app.worker import celery_app
 def _lead_domain(website_url: str | None) -> str | None:
     if not website_url:
         return None
-    return urlparse(website_url).netloc.strip().lower() or None
+    normalized_url = website_url.strip()
+    if not normalized_url:
+        return None
+    return urlparse(normalized_url).netloc.strip().lower() or None
 
 
 def _is_suppressed(session, lead: Lead) -> bool:

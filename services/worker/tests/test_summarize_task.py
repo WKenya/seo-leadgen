@@ -200,6 +200,20 @@ class SummarizeTaskTests(unittest.TestCase):
         session = _CaseAwareSuppressionSession(stored_values=["acme.example"])
         self.assertTrue(summarize._is_suppressed(session, lead))
 
+    def test_is_suppressed_matches_whitespace_padded_website_url_domain(self) -> None:
+        lead = summarize.Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="test",
+            website_url="  https://acme.example/home  ",
+            website_domain=None,
+            email=None,
+            status="Audited",
+        )
+        session = _CaseAwareSuppressionSession(stored_values=["acme.example"])
+        self.assertTrue(summarize._is_suppressed(session, lead))
+
 
 if __name__ == "__main__":
     unittest.main()

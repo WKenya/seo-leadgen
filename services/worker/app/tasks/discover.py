@@ -14,7 +14,10 @@ from app.worker import celery_app
 def _domain(url: str | None) -> str | None:
     if not url:
         return None
-    return urlparse(url).netloc.strip().lower() or None
+    normalized_url = url.strip()
+    if not normalized_url:
+        return None
+    return urlparse(normalized_url).netloc.strip().lower() or None
 
 
 def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | None:
