@@ -137,6 +137,7 @@ Notes:
 - suppression keys are normalized (trim + lowercase) in admin/webhook flows; matching is trim+case-insensitive for legacy rows
 - metrics/read `provider` filters are trim+case-insensitive (`sendgrid` matches stored `SendGrid` / `  SendGrid  `)
 - metrics/read event-type matching is trim+case-insensitive for legacy rows (e.g. padded/mixed-case `*_blocked_*`, `*_skipped_*`, `sent`)
+- metrics event-type buckets are normalized (trim+lowercase) so legacy variants aggregate together
 - artifacts Basic auth scheme is case-insensitive (`basic` and `Basic` both accepted)
 - artifacts route returns `503 artifact_auth_not_configured` when only one of `ARTIFACTS_BASIC_AUTH_USER/PASS` is set
 - webhook lead lookup trims stored `leads.email` / `leads.website_domain` for legacy whitespace rows
