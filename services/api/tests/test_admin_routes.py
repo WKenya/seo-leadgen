@@ -329,7 +329,7 @@ class AdminRouteTests(unittest.TestCase):
             category="HVAC",
             source="google_places",
             website_url="https://d.example",
-            status="Discovered",
+            status="DiScOvErEd",
         )
         suppressed = Lead(
             id=uuid4(),
@@ -352,7 +352,7 @@ class AdminRouteTests(unittest.TestCase):
         with patch("app.routes.admin.celery_client.send_task", side_effect=_fake_send_task):
             response = self.client.post(
                 "/admin/run-audit-batch",
-                json={"statuses": ["Discovered"], "limit": 10},
+                json={"statuses": ["discovered"], "limit": 10},
             )
 
         self.assertEqual(response.status_code, 200, response.text)

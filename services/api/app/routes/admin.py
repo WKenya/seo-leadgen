@@ -141,11 +141,11 @@ def run_audit(lead_id: str) -> dict[str, str]:
 
 @router.post("/run-audit-batch")
 def run_audit_batch(payload: AuditBatchRequest, db: Session = Depends(get_db)) -> dict[str, object]:
-    statuses = [s.strip() for s in payload.statuses if s.strip()]
+    statuses = [s.strip().lower() for s in payload.statuses if s.strip()]
     limit = max(1, min(int(payload.limit), 200))
     stmt = select(Lead).order_by(Lead.created_at.desc()).limit(limit)
     if statuses:
-        stmt = stmt.where(Lead.status.in_(statuses))
+        stmt = stmt.where(func.lower(func.coalesce(Lead.status, "")).in_(statuses))
     leads = db.execute(stmt).scalars().all()
 
     items: list[dict[str, str]] = []
