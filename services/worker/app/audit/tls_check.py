@@ -40,7 +40,7 @@ def check_tls(url: str) -> dict[str, object]:
     http_chain, http_final, http_err = _fetch_chain(http_url)
     https_chain, https_final, https_err = _fetch_chain(https_url)
 
-    final_url = https_final or http_final or url
+    final_url = https_final or http_final or https_url
     redirect_chain = https_chain if https_chain else http_chain
     http_to_https = bool(http_final and http_final.startswith("https://"))
     https_ok = https_err is None and bool(https_final and https_final.startswith("https://"))
