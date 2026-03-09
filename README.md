@@ -153,7 +153,7 @@ Notes:
 - discover suppression matching ignores blank suppression rows (prevents false suppression on no-domain leads)
 - discover lead matching trims stored `place_id` values for legacy whitespace rows
 - summarize suppression check now considers `lead.website_domain` when `website_url` is missing
-- crawler internal-link host classification is trim+case-insensitive (mixed-case/whitespace URLs still traverse as internal)
+- crawler internal-link host classification is trim+case-insensitive and handles schemeless URLs (`example.com/path`); missing-host candidates are not treated as internal
 - read route event filters are case-insensitive for both `event_type` and `provider` (legacy mixed-case rows still match)
 - read route event payloads normalize top-level `provider` values (trim+lowercase) from legacy column/payload data
 - `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
