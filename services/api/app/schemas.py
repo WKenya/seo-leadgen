@@ -4,6 +4,17 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+def _normalize_optional_text(value: object | None, *, lower: bool = False) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if lower:
+        return text.lower()
+    return text
+
+
 class LeadRead(BaseModel):
     id: UUID
     name: str
@@ -89,30 +100,20 @@ class OutreachEventRead(BaseModel):
     def from_model(cls, event: object) -> "OutreachEventRead":
         payload = getattr(event, "payload", None)
         payload_map = payload if isinstance(payload, dict) else {}
-        provider_value = getattr(event, "provider", None)
-        normalized_provider: str | None = None
-        if provider_value is not None:
-            normalized_provider = str(provider_value).strip().lower() or None
-        elif payload_map.get("provider") is not None:
-            normalized_provider = str(payload_map.get("provider")).strip().lower() or None
+        normalized_provider = _normalize_optional_text(getattr(event, "provider", None), lower=True) or _normalize_optional_text(
+            payload_map.get("provider"),
+            lower=True,
+        )
         return cls(
             id=getattr(event, "id"),
             lead_id=getattr(event, "lead_id"),
-            external_id=getattr(event, "external_id", None),
+            external_id=_normalize_optional_text(getattr(event, "external_id", None)),
             type=getattr(event, "type"),
             payload=payload,
             provider=normalized_provider,
-            provider_event_id=(
-                str(payload_map.get("provider_event_id")) if payload_map.get("provider_event_id") is not None else None
-            ),
-            provider_event_name=(
-                str(payload_map.get("provider_event_name"))
-                if payload_map.get("provider_event_name") is not None
-                else None
-            ),
-            provider_event_at=(
-                str(payload_map.get("provider_event_at")) if payload_map.get("provider_event_at") is not None else None
-            ),
+            provider_event_id=_normalize_optional_text(payload_map.get("provider_event_id")),
+            provider_event_name=_normalize_optional_text(payload_map.get("provider_event_name")),
+            provider_event_at=_normalize_optional_text(payload_map.get("provider_event_at")),
             created_at=getattr(event, "created_at", None),
         )
 
