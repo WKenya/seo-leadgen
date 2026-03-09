@@ -358,7 +358,7 @@ class AdminRouteTests(unittest.TestCase):
             category="HVAC",
             source="google_places",
             website_url="https://d.example",
-            status="DiScOvErEd",
+            status="  DiScOvErEd  ",
         )
         suppressed = Lead(
             id=uuid4(),

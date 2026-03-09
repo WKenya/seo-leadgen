@@ -149,7 +149,7 @@ def run_audit_batch(payload: AuditBatchRequest, db: Session = Depends(get_db)) -
     limit = max(1, min(int(payload.limit), 200))
     stmt = select(Lead).order_by(Lead.created_at.desc()).limit(limit)
     if statuses:
-        stmt = stmt.where(func.lower(func.coalesce(Lead.status, "")).in_(statuses))
+        stmt = stmt.where(func.lower(func.trim(func.coalesce(Lead.status, ""))).in_(statuses))
     leads = db.execute(stmt).scalars().all()
 
     items: list[dict[str, str]] = []
