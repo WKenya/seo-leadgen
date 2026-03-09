@@ -147,6 +147,8 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["drafts_sent_today"], 1)
         self.assertEqual(body["events_today"], 2)
         self.assertEqual(body["events_today_by_type"], {"bounced": 1, "sent": 1})
+        self.assertEqual(body["failures_today"], 1)
+        self.assertEqual(body["failures_today_by_type"], {"bounced": 1})
         self.assertEqual(body["webhook_events_by_provider_today"], {"sendgrid": 2})
         self.assertEqual(body["webhook_event_types_by_provider_today"], {"sendgrid": {"bounced": 1, "sent": 1}})
         self.assertEqual(body["latest_webhook_providers"], ["sendgrid", "mailgun"])
@@ -156,6 +158,8 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertIsNone(body["provider_filter"])
         self.assertIsNone(body["webhook_events_today_for_provider"])
         self.assertIsNone(body["webhook_event_types_today_for_provider"])
+        self.assertIsNone(body["webhook_failures_today_for_provider"])
+        self.assertIsNone(body["webhook_failure_types_today_for_provider"])
         self.assertIsNone(body["latest_event_types_for_provider"])
 
     def test_metrics_summary_provider_filter_returns_provider_scoped_fields(self) -> None:
@@ -203,6 +207,8 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["provider_filter"], "sendgrid")
         self.assertEqual(body["webhook_events_today_for_provider"], 2)
         self.assertEqual(body["webhook_event_types_today_for_provider"], {"bounced": 1, "sent": 1})
+        self.assertEqual(body["webhook_failures_today_for_provider"], 1)
+        self.assertEqual(body["webhook_failure_types_today_for_provider"], {"bounced": 1})
         self.assertCountEqual(body["latest_event_types_for_provider"], ["bounced", "sent"])
 
     def test_metrics_summary_latest_limit_trims_latest_lists(self) -> None:
@@ -231,6 +237,29 @@ class MetricsRouteTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["latest_limit"], 2)
         self.assertEqual(len(body["latest_event_types"]), 2)
+
+    def test_metrics_summary_counts_blocked_and_skipped_as_failures(self) -> None:
+        from app.models import Lead, OutreachEvent
+
+        now = datetime.now(timezone.utc)
+        lead = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
+        self.db.add(lead)
+        self.db.commit()
+        self.db.add_all(
+            [
+                OutreachEvent(id=uuid4(), lead_id=lead.id, type="send_blocked_cap", created_at=now, payload={}),
+                OutreachEvent(id=uuid4(), lead_id=lead.id, type="drafted_skipped_no_email", created_at=now, payload={}),
+                OutreachEvent(id=uuid4(), lead_id=lead.id, type="sent", created_at=now, payload={}),
+            ]
+        )
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["events_today"], 3)
+        self.assertEqual(body["failures_today"], 2)
+        self.assertEqual(body["failures_today_by_type"], {"drafted_skipped_no_email": 1, "send_blocked_cap": 1})
 
     def test_metrics_summary_provider_filter_uses_provider_scoped_latest_query(self) -> None:
         from app.models import Lead, OutreachEvent
@@ -268,6 +297,8 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["latest_limit"], 1)
         self.assertEqual(body["latest_event_types"], ["bounced"])
         self.assertEqual(body["latest_event_types_for_provider"], ["sent"])
+        self.assertEqual(body["webhook_failures_today_for_provider"], 0)
+        self.assertEqual(body["webhook_failure_types_today_for_provider"], {})
 
 
 if __name__ == "__main__":

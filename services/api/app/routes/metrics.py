@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -14,6 +14,15 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 def _provider_expr():
     return func.coalesce(OutreachEvent.provider, "")
+
+
+def _failure_event_filter():
+    return or_(
+        OutreachEvent.type == "bounced",
+        OutreachEvent.type.like("%blocked%"),
+        OutreachEvent.type.like("%failed%"),
+        OutreachEvent.type.like("%skipped%"),
+    )
 
 
 @router.get("/summary")
@@ -47,6 +56,12 @@ def metrics_summary(
         select(OutreachEvent.type, func.count()).where(*today_filter).group_by(OutreachEvent.type)
     ).all()
     events_today_by_type = {str(event_type): int(count) for event_type, count in events_today_by_type_rows}
+    failure_filter = _failure_event_filter()
+    failures_today_by_type_rows = db.execute(
+        select(OutreachEvent.type, func.count()).where(*today_filter, failure_filter).group_by(OutreachEvent.type)
+    ).all()
+    failures_today_by_type = {str(event_type): int(count) for event_type, count in failures_today_by_type_rows}
+    failures_today = sum(failures_today_by_type.values())
 
     provider_rows = db.execute(
         select(provider_column.label("provider"), func.count())
@@ -83,6 +98,8 @@ def metrics_summary(
 
     webhook_events_today_for_provider: int | None = None
     webhook_event_types_today_for_provider: dict[str, int] | None = None
+    webhook_failures_today_for_provider: int | None = None
+    webhook_failure_types_today_for_provider: dict[str, int] | None = None
     latest_event_types_for_provider: list[str] | None = None
     if provider_filter:
         webhook_events_today_for_provider = int(
@@ -100,6 +117,15 @@ def metrics_summary(
         webhook_event_types_today_for_provider = {
             str(event_type): int(count) for event_type, count in provider_type_filtered_rows
         }
+        provider_failure_rows = db.execute(
+            select(OutreachEvent.type, func.count())
+            .where(*today_filter, provider_column == provider_filter, failure_filter)
+            .group_by(OutreachEvent.type)
+        ).all()
+        webhook_failure_types_today_for_provider = {
+            str(event_type): int(count) for event_type, count in provider_failure_rows
+        }
+        webhook_failures_today_for_provider = sum(webhook_failure_types_today_for_provider.values())
         latest_event_types_for_provider = [
             event_type
             for event_type, in db.execute(
@@ -118,6 +144,8 @@ def metrics_summary(
         "drafts_sent_today": drafts_sent_today,
         "events_today": events_today,
         "events_today_by_type": events_today_by_type,
+        "failures_today": failures_today,
+        "failures_today_by_type": failures_today_by_type,
         "webhook_events_by_provider_today": webhook_events_by_provider_today,
         "webhook_event_types_by_provider_today": webhook_event_types_by_provider_today,
         "latest_webhook_providers": latest_webhook_providers,
@@ -126,5 +154,7 @@ def metrics_summary(
         "provider_filter": provider_filter,
         "webhook_events_today_for_provider": webhook_events_today_for_provider,
         "webhook_event_types_today_for_provider": webhook_event_types_today_for_provider,
+        "webhook_failures_today_for_provider": webhook_failures_today_for_provider,
+        "webhook_failure_types_today_for_provider": webhook_failure_types_today_for_provider,
         "latest_event_types_for_provider": latest_event_types_for_provider,
     }
