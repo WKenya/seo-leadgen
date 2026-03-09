@@ -43,6 +43,12 @@ class AuditExtractTests(unittest.TestCase):
     def test_internal_url_classification_trims_whitespace(self) -> None:
         self.assertTrue(is_internal_url("  https://example.com  ", " https://example.com/about "))
 
+    def test_internal_url_classification_handles_schemeless_urls(self) -> None:
+        self.assertTrue(is_internal_url("example.com", "example.com/about"))
+
+    def test_internal_url_classification_rejects_missing_hosts(self) -> None:
+        self.assertFalse(is_internal_url("/root", "/about"))
+
     def test_find_contact_signals_detects_contact_page_mailto_tel(self) -> None:
         html = """
         <html><body>
