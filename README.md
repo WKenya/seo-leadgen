@@ -142,6 +142,7 @@ Notes:
 - webhook lead lookup trims stored `leads.email` / `leads.website_domain` for legacy whitespace rows
 - webhook duplicate-event detection trims stored `outreach_events.external_id` for legacy whitespace rows
 - discover task domain/suppression matching trims and lowercases legacy stored values
+- discover lead matching trims stored `place_id` values for legacy whitespace rows
 - read route event filters are case-insensitive for both `event_type` and `provider` (legacy mixed-case rows still match)
 - `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
