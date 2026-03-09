@@ -341,6 +341,46 @@ class AdminRouteTests(unittest.TestCase):
         refreshed = self.db.get(Lead, lead.id)
         self.assertEqual(refreshed.status, "Suppressed")
 
+    def test_mark_optout_falls_back_when_email_is_whitespace(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, _ = self._create_lead_with_draft(lead_email="   ")
+        lead.website_domain = "  Acme.Example  "
+        self.db.commit()
+
+        response = self.client.post(f"/admin/mark-optout/{lead.id}", json={"reason": "manual"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+        self.assertEqual(suppression.email_or_domain, "acme.example")
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+
+    def test_record_event_opt_out_falls_back_from_blank_email_to_website_url_domain(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, _ = self._create_lead_with_draft(lead_email="   ")
+        lead.website_domain = None
+        lead.website_url = "  https://acme.example/path  "
+        self.db.commit()
+
+        response = self.client.post(
+            f"/admin/record-event/{lead.id}",
+            json={"event_type": "opt_out", "note": "Unsubscribe"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "recorded")
+
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+        self.assertEqual(suppression.email_or_domain, "acme.example")
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+
     def test_run_discovery_batch_queues_nonblank_categories(self) -> None:
         calls: list[tuple[str, dict[str, object] | None]] = []
 

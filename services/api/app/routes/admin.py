@@ -44,13 +44,16 @@ class AuditBatchRequest(BaseModel):
 
 
 def _lead_suppression_key(lead: Lead) -> str | None:
-    if lead.email:
-        return lead.email.strip().lower()
-    if lead.website_domain:
-        return lead.website_domain.strip().lower()
+    email = _normalize_suppression_value(lead.email)
+    if email:
+        return email
+    domain = _normalize_suppression_value(lead.website_domain)
+    if domain:
+        return domain
     if lead.website_url:
-        domain = urlparse(lead.website_url.strip()).netloc.strip().lower()
-        return domain or None
+        website_domain = _normalize_suppression_value(urlparse(lead.website_url.strip()).netloc)
+        if website_domain:
+            return website_domain
     return None
 
 
