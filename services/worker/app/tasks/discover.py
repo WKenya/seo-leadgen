@@ -46,11 +46,12 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
 
 
 def _suppression_values(session) -> set[str]:
-    return {
-        (row.email_or_domain or "").strip().lower()
-        for row in session.execute(select(Suppression)).scalars()
-        if row.email_or_domain
-    }
+    values: set[str] = set()
+    for row in session.execute(select(Suppression)).scalars():
+        normalized = (row.email_or_domain or "").strip().lower()
+        if normalized:
+            values.add(normalized)
+    return values
 
 
 @celery_app.task(name="discover_leads")

@@ -130,6 +130,13 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         values = _suppression_values(self.session)
         self.assertIn("acme.example", values)
 
+    def test_suppression_values_ignores_blank_rows(self) -> None:
+        self.session.add(Suppression(email_or_domain="   ", reason="opt_out"))
+        self.session.commit()
+
+        values = _suppression_values(self.session)
+        self.assertEqual(values, set())
+
 
 if __name__ == "__main__":
     unittest.main()
