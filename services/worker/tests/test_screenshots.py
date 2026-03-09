@@ -22,7 +22,11 @@ class ScreenshotTests(unittest.TestCase):
         rel = build_screenshot_relpath("not-a-url", now=datetime(2026, 2, 24, tzinfo=timezone.utc))
         self.assertTrue(rel.startswith("screenshots/unknown/"))
 
+    def test_build_screenshot_relpath_handles_schemeless_whitespace_url(self) -> None:
+        now = datetime(2026, 2, 24, tzinfo=timezone.utc)
+        rel = build_screenshot_relpath("  example.com/path  ", now=now)
+        self.assertEqual(rel, "screenshots/example.com/20260224T000000Z.png")
+
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -10,7 +10,11 @@ SAFE_SEGMENT = re.compile(r"[^a-z0-9.-]+")
 
 
 def _slug_host(url: str) -> str:
-    host = (urlparse(url).netloc or "unknown").lower()
+    normalized_url = (url or "").strip()
+    parsed = urlparse(normalized_url if "://" in normalized_url else f"https://{normalized_url}")
+    host = (parsed.netloc or "unknown").strip().lower()
+    if host not in {"unknown", "localhost"} and "." not in host and ":" not in host:
+        host = "unknown"
     host = SAFE_SEGMENT.sub("-", host).strip("-.")
     return host or "unknown"
 
