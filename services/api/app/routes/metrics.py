@@ -7,7 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import EmailDraft, Lead, OutreachEvent
+from app.models import Audit, EmailDraft, Lead, OutreachEvent
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -43,10 +43,18 @@ def metrics_summary(
     drafts_approved = int(
         db.execute(select(func.count()).select_from(EmailDraft).where(EmailDraft.approved_at.is_not(None))).scalar_one()
     )
+    drafts_created_today = int(
+        db.execute(
+            select(func.count()).select_from(EmailDraft).where(EmailDraft.created_at >= start, EmailDraft.created_at < end)
+        ).scalar_one()
+    )
     drafts_sent_today = int(
         db.execute(
             select(func.count()).select_from(EmailDraft).where(EmailDraft.sent_at >= start, EmailDraft.sent_at < end)
         ).scalar_one()
+    )
+    audits_today = int(
+        db.execute(select(func.count()).select_from(Audit).where(Audit.started_at >= start, Audit.started_at < end)).scalar_one()
     )
     today_filter = (OutreachEvent.created_at >= start, OutreachEvent.created_at < end)
     provider_column = _provider_expr()
@@ -141,7 +149,9 @@ def metrics_summary(
         "leads_by_status": leads_by_status,
         "drafts_total": drafts_total,
         "drafts_approved": drafts_approved,
+        "drafts_created_today": drafts_created_today,
         "drafts_sent_today": drafts_sent_today,
+        "audits_today": audits_today,
         "events_today": events_today,
         "events_today_by_type": events_today_by_type,
         "failures_today": failures_today,

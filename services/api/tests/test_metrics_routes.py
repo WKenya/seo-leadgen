@@ -89,14 +89,15 @@ class MetricsRouteTests(unittest.TestCase):
 
         lead1 = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
         lead2 = Lead(id=uuid4(), name="B", source="x", website_url="https://b.example", status="Suppressed")
-        audit1 = Audit(id=uuid4(), lead_id=lead1.id, final_url=lead1.website_url)
-        audit2 = Audit(id=uuid4(), lead_id=lead2.id, final_url=lead2.website_url)
+        audit1 = Audit(id=uuid4(), lead_id=lead1.id, final_url=lead1.website_url, started_at=now)
+        audit2 = Audit(id=uuid4(), lead_id=lead2.id, final_url=lead2.website_url, started_at=yesterday)
         draft1 = EmailDraft(
             id=uuid4(),
             lead_id=lead1.id,
             audit_id=audit1.id,
             subject="d1",
             body_text="x",
+            created_at=now,
             approved_at=now,
             sent_at=now,
         )
@@ -106,6 +107,7 @@ class MetricsRouteTests(unittest.TestCase):
             audit_id=audit2.id,
             subject="d2",
             body_text="x",
+            created_at=yesterday,
         )
         event1 = OutreachEvent(
             id=uuid4(),
@@ -144,7 +146,9 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["leads_by_status"]["Suppressed"], 1)
         self.assertEqual(body["drafts_total"], 2)
         self.assertEqual(body["drafts_approved"], 1)
+        self.assertEqual(body["drafts_created_today"], 1)
         self.assertEqual(body["drafts_sent_today"], 1)
+        self.assertEqual(body["audits_today"], 1)
         self.assertEqual(body["events_today"], 2)
         self.assertEqual(body["events_today_by_type"], {"bounced": 1, "sent": 1})
         self.assertEqual(body["failures_today"], 1)
