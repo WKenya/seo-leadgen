@@ -11,6 +11,16 @@ from app.models import Audit, EmailDraft, Lead, OutreachEvent
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
+_STATUS_LABELS = {
+    "discovered": "Discovered",
+    "audited": "Audited",
+    "draft ready": "Draft Ready",
+    "approved to send": "Approved to Send",
+    "sent": "Sent",
+    "replied": "Replied",
+    "suppressed": "Suppressed",
+}
+
 
 def _provider_expr():
     return func.lower(func.trim(func.coalesce(OutreachEvent.provider, "")))
@@ -18,6 +28,16 @@ def _provider_expr():
 
 def _event_type_expr():
     return func.lower(func.trim(func.coalesce(OutreachEvent.type, "")))
+
+
+def _status_expr():
+    return func.lower(func.trim(func.coalesce(Lead.status, "")))
+
+
+def _status_label(status: str) -> str:
+    if not status:
+        return "Unknown"
+    return _STATUS_LABELS.get(status, status)
 
 
 def _failure_event_filter():
@@ -41,8 +61,9 @@ def metrics_summary(
     end = start + timedelta(days=1)
     provider_filter = (provider or "").strip().lower() or None
 
-    status_rows = db.execute(select(Lead.status, func.count()).group_by(Lead.status).order_by(Lead.status)).all()
-    leads_by_status = {str(status or "Unknown"): int(count) for status, count in status_rows}
+    status_column = _status_expr()
+    status_rows = db.execute(select(status_column.label("status"), func.count()).group_by(status_column).order_by(status_column)).all()
+    leads_by_status = {_status_label(str(status or "")): int(count) for status, count in status_rows}
 
     drafts_total = int(db.execute(select(func.count()).select_from(EmailDraft)).scalar_one())
     drafts_approved = int(

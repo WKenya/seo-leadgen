@@ -355,6 +355,20 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["failures_today"], 1)
         self.assertEqual(body["failures_today_by_type"], {"send_blocked_cap": 1})
 
+    def test_metrics_summary_normalizes_status_buckets(self) -> None:
+        from app.models import Lead
+
+        lead1 = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status=" Discovered ")
+        lead2 = Lead(id=uuid4(), name="B", source="x", website_url="https://b.example", status="dIsCoVeReD")
+        lead3 = Lead(id=uuid4(), name="C", source="x", website_url="https://c.example", status="  SuPpReSsEd  ")
+        self.db.add_all([lead1, lead2, lead3])
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["leads_by_status"], {"Discovered": 2, "Suppressed": 1})
+
     def test_metrics_summary_normalizes_event_type_buckets(self) -> None:
         from app.models import Lead, OutreachEvent
 
