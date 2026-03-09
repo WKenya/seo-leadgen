@@ -17,7 +17,7 @@ def _provider_expr():
 
 
 def _failure_event_filter():
-    event_type = func.lower(func.coalesce(OutreachEvent.type, ""))
+    event_type = func.lower(func.trim(func.coalesce(OutreachEvent.type, "")))
     return or_(
         event_type == "bounced",
         event_type.like("%blocked%"),

@@ -388,6 +388,27 @@ class ReadRouteTests(unittest.TestCase):
         lead_items = lead_response.json()["items"]
         self.assertTrue(any(item["id"] == str(legacy_event.id) for item in lead_items))
 
+    def test_list_events_event_type_filter_matches_whitespace_padded_stored_type(self) -> None:
+        from app.models import OutreachEvent
+
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+        legacy_event = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="  SeNt  ",
+            provider="mailgun",
+            payload={"provider": "mailgun", "provider_event_id": "mg-legacy-sent-space-1"},
+            created_at=datetime.now(timezone.utc),
+        )
+        self.db.add(legacy_event)
+        self.db.commit()
+
+        response = self.client.get("/events", params={"event_type": "sent", "limit": 20, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        items = response.json()["items"]
+        self.assertTrue(any(item["id"] == str(legacy_event.id) for item in items))
+
     def test_list_events_and_lead_events_support_offset(self) -> None:
         seeded = self._seed_lead_bundle()
         lead1 = seeded["lead1"]
