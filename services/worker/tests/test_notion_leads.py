@@ -55,6 +55,22 @@ class NotionLeadsTests(unittest.TestCase):
         proof_text = props["Proof"]["rich_text"][0]["text"]["content"]
         self.assertIn("https://api.example.com/artifacts/screenshots/acme.png", proof_text)
 
+    def test_lead_page_properties_marks_opt_out_for_mixed_case_suppressed_status(self) -> None:
+        lead = SimpleNamespace(
+            id=uuid.uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            status="sUpPrEsSeD",
+            email="owner@acme.example",
+            phone=None,
+            address=None,
+        )
+
+        props = lead_page_properties(lead=lead, audit=None, draft=None)
+        self.assertTrue(props["Opt-out"]["checkbox"])
+
 
 if __name__ == "__main__":
     unittest.main()

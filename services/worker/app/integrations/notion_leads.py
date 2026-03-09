@@ -77,7 +77,7 @@ def lead_page_properties(
         "Proof": {"rich_text": _rich_text("\n".join(proof_lines) if proof_lines else None)},
         "Email Draft": {"rich_text": _rich_text(draft_preview)},
         "Gmail Draft Link": {"url": draft.gmail_draft_url if draft else None},
-        "Opt-out": {"checkbox": lead.status == "Suppressed"},
+        "Opt-out": {"checkbox": (lead.status or "").strip().lower() == "suppressed"},
     }
     return props
 
