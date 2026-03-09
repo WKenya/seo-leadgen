@@ -23,10 +23,12 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
         return lead
 
     target_domain = _domain(website_url)
-    if target_domain:
-        lead = session.execute(select(Lead).where(Lead.website_domain == target_domain)).scalar_one_or_none()
-        if lead is not None:
-            return lead
+    if not target_domain:
+        return None
+
+    lead = session.execute(select(Lead).where(Lead.website_domain == target_domain)).scalar_one_or_none()
+    if lead is not None:
+        return lead
 
     for candidate in session.execute(select(Lead).where(Lead.website_domain.is_(None), Lead.website_url.is_not(None))).scalars():
         if _domain(candidate.website_url) == target_domain:

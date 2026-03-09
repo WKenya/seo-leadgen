@@ -58,6 +58,21 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(found.id, lead.id)
 
+    def test_find_existing_lead_does_not_fallback_match_when_target_domain_missing(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Legacy Missing Domain",
+            source="google_places",
+            website_url="",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        found = _find_existing_lead(self.session, place_id="new-place", website_url="")
+        self.assertIsNone(found)
+
 
 if __name__ == "__main__":
     unittest.main()
