@@ -75,7 +75,9 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
     if not keys:
         return False
     return (
-        db.execute(select(Suppression).where(func.lower(Suppression.email_or_domain).in_(keys))).scalar_one_or_none()
+        db.execute(
+            select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(keys))
+        ).scalar_one_or_none()
         is not None
     )
 
@@ -93,7 +95,9 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
     if not normalized_value:
         return
     suppression = db.execute(
-        select(Suppression).where(func.lower(Suppression.email_or_domain) == normalized_value)
+        select(Suppression).where(
+            func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))) == normalized_value
+        )
     ).scalar_one_or_none()
     if suppression is None:
         db.add(Suppression(email_or_domain=normalized_value, reason=reason))
@@ -299,7 +303,9 @@ def unsuppress_lead(
     if not value:
         return {"lead_id": str(lead_id), "status": "missing_suppression_target"}
 
-    suppression = db.execute(select(Suppression).where(func.lower(Suppression.email_or_domain) == value)).scalar_one_or_none()
+    suppression = db.execute(
+        select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))) == value)
+    ).scalar_one_or_none()
     if suppression is None:
         return {"lead_id": str(lead_id), "status": "not_suppressed"}
 

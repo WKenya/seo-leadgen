@@ -237,6 +237,24 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row.email_or_domain, "owner@acme.example")
 
+    def test_webhook_token_mode_avoids_duplicate_with_legacy_whitespace_suppression(self) -> None:
+        from app.models import Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        self.db.add(Suppression(email_or_domain="  owner@acme.example  ", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json=[{"email": "owner@acme.example", "event": "unsubscribe", "sg_event_id": "sg-existing-1"}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        rows = self.db.execute(select(Suppression)).scalars().all()
+        self.assertEqual(len(rows), 1)
+
     def test_webhook_form_payload_with_invalid_utf8_returns_400(self) -> None:
         response = self.client.post(
             "/webhooks/outreach-events",

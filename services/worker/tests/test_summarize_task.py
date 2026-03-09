@@ -82,10 +82,13 @@ class _CaseAwareSuppressionSession:
     def execute(self, statement):  # noqa: ANN001
         where = list(statement._where_criteria)
         criterion = where[0]
-        is_lower_query = getattr(criterion.left, "name", "") == "lower"
+        criterion_text = str(criterion).lower()
+        is_lower_query = getattr(criterion.left, "name", "") == "lower" or "lower(" in criterion_text
+        is_trim_query = "trim(" in criterion_text
         candidates = [str(value) for value in criterion.right.value]
         for stored in self.stored_values:
-            probe = stored.lower() if is_lower_query else stored
+            probe = stored.strip() if is_trim_query else stored
+            probe = probe.lower() if is_lower_query else probe
             if probe in candidates:
                 return _FakeScalarResult(object())
         return _FakeScalarResult(None)
@@ -168,6 +171,19 @@ class SummarizeTaskTests(unittest.TestCase):
             status="Audited",
         )
         session = _CaseAwareSuppressionSession(stored_values=["Owner@Acme.Example"])
+        self.assertTrue(summarize._is_suppressed(session, lead))
+
+    def test_is_suppressed_matches_whitespace_padded_stored_values(self) -> None:
+        lead = summarize.Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="test",
+            website_url="https://acme.example",
+            email=" owner@acme.example ",
+            status="Audited",
+        )
+        session = _CaseAwareSuppressionSession(stored_values=["  Owner@Acme.Example  "])
         self.assertTrue(summarize._is_suppressed(session, lead))
 
 

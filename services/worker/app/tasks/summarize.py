@@ -18,19 +18,21 @@ from app.worker import celery_app
 def _lead_domain(website_url: str | None) -> str | None:
     if not website_url:
         return None
-    return urlparse(website_url).netloc.lower() or None
+    return urlparse(website_url).netloc.strip().lower() or None
 
 
 def _is_suppressed(session, lead: Lead) -> bool:
     values = []
     if lead.email:
-        values.append(lead.email.lower())
+        values.append(lead.email.strip().lower())
     domain = _lead_domain(lead.website_url)
     if domain:
         values.append(domain)
     if not values:
         return False
-    row = session.execute(select(Suppression).where(func.lower(Suppression.email_or_domain).in_(values))).scalar_one_or_none()
+    row = session.execute(
+        select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(values))
+    ).scalar_one_or_none()
     return row is not None
 
 

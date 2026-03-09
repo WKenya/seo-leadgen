@@ -150,7 +150,7 @@ class AdminRouteTests(unittest.TestCase):
         from app.models import Lead, Suppression
 
         lead, _, draft = self._create_lead_with_draft()
-        self.db.add(Suppression(email_or_domain="Owner@Acme.Example", reason="opt_out"))
+        self.db.add(Suppression(email_or_domain="  Owner@Acme.Example  ", reason="opt_out"))
         self.db.commit()
 
         response = self.client.post(f"/admin/approve-draft/{draft.id}")
@@ -283,7 +283,7 @@ class AdminRouteTests(unittest.TestCase):
 
         lead, _, _ = self._create_lead_with_draft()
         lead.status = "sUpPrEsSeD"
-        self.db.add(Suppression(email_or_domain="owner@acme.example", reason="opt_out"))
+        self.db.add(Suppression(email_or_domain="  owner@acme.example  ", reason="opt_out"))
         self.db.commit()
 
         response = self.client.post(f"/admin/unsuppress/{lead.id}", json={})
@@ -292,6 +292,20 @@ class AdminRouteTests(unittest.TestCase):
 
         refreshed = self.db.get(Lead, lead.id)
         self.assertEqual(refreshed.status, "Discovered")
+
+    def test_mark_optout_avoids_duplicate_with_legacy_whitespace_suppression(self) -> None:
+        from app.models import Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        self.db.add(Suppression(email_or_domain="  owner@acme.example  ", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/mark-optout/{lead.id}", json={"reason": "manual"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        rows = self.db.execute(select(Suppression)).scalars().all()
+        self.assertEqual(len(rows), 1)
 
     def test_mark_optout_normalizes_email_or_domain(self) -> None:
         from app.models import Suppression
