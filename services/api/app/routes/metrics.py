@@ -13,7 +13,7 @@ router = APIRouter(prefix="/metrics", tags=["metrics"])
 
 
 def _provider_expr():
-    return func.coalesce(OutreachEvent.provider, "")
+    return func.lower(func.coalesce(OutreachEvent.provider, ""))
 
 
 def _failure_event_filter():
