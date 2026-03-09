@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import urlparse
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.discovery.google_places import GooglePlacesClient
@@ -14,7 +14,7 @@ from app.worker import celery_app
 def _domain(url: str | None) -> str | None:
     if not url:
         return None
-    return urlparse(url).netloc.lower() or None
+    return urlparse(url).netloc.strip().lower() or None
 
 
 def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | None:
@@ -26,7 +26,9 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
     if not target_domain:
         return None
 
-    lead = session.execute(select(Lead).where(Lead.website_domain == target_domain)).scalar_one_or_none()
+    lead = session.execute(
+        select(Lead).where(func.lower(func.trim(func.coalesce(Lead.website_domain, ""))) == target_domain)
+    ).scalar_one_or_none()
     if lead is not None:
         return lead
 
@@ -38,7 +40,7 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
 
 def _suppression_values(session) -> set[str]:
     return {
-        (row.email_or_domain or "").lower()
+        (row.email_or_domain or "").strip().lower()
         for row in session.execute(select(Suppression)).scalars()
         if row.email_or_domain
     }
