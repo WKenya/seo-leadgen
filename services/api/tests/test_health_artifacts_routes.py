@@ -141,6 +141,19 @@ class HealthAndArtifactRouteTests(unittest.TestCase):
         self.assertEqual(ok.status_code, 200, ok.text)
         self.assertEqual(ok.text, "artifact-proof")
 
+    def test_artifact_accepts_lowercase_basic_scheme(self) -> None:
+        os.environ["ARTIFACTS_BASIC_AUTH_USER"] = "u"
+        os.environ["ARTIFACTS_BASIC_AUTH_PASS"] = "p"
+        self._get_settings.cache_clear()
+
+        token = base64.b64encode(b"u:p").decode("ascii")
+        response = self.client.get(
+            f"/artifacts/{self.artifact_relpath}",
+            headers={"Authorization": f"basic {token}"},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.text, "artifact-proof")
+
     def test_artifact_rejects_path_escape(self) -> None:
         response = self.client.get("/artifacts/%2E%2E/etc/passwd")
         self.assertEqual(response.status_code, 400)

@@ -13,10 +13,13 @@ router = APIRouter(prefix="/artifacts", tags=["artifacts"])
 def _require_artifact_auth(authorization: str | None, settings) -> None:
     if not settings.artifacts_basic_auth_user and not settings.artifacts_basic_auth_pass:
         return
-    if not authorization or not authorization.startswith("Basic "):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="auth required", headers={"WWW-Authenticate": "Basic"})
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "basic" or not token:
         raise HTTPException(status_code=401, detail="auth required", headers={"WWW-Authenticate": "Basic"})
     try:
-        raw = base64.b64decode(authorization.split(" ", 1)[1]).decode("utf-8")
+        raw = base64.b64decode(token, validate=True).decode("utf-8")
         username, password = raw.split(":", 1)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=401, detail="invalid auth", headers={"WWW-Authenticate": "Basic"}) from exc
