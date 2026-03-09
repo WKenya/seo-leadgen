@@ -278,6 +278,21 @@ class AdminRouteTests(unittest.TestCase):
         self.assertTrue(any(event.type == "opt_out" for event in events))
         self.assertTrue(any(event.type == "unsuppress" for event in events))
 
+    def test_unsuppress_restores_discovered_for_mixed_case_suppressed_status(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        lead.status = "sUpPrEsSeD"
+        self.db.add(Suppression(email_or_domain="owner@acme.example", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/unsuppress/{lead.id}", json={})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "unsuppressed")
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Discovered")
+
     def test_mark_optout_normalizes_email_or_domain(self) -> None:
         from app.models import Suppression
 

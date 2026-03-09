@@ -304,7 +304,7 @@ def unsuppress_lead(
         return {"lead_id": str(lead_id), "status": "not_suppressed"}
 
     db.delete(suppression)
-    if lead.status == "Suppressed":
+    if (lead.status or "").strip().lower() == "suppressed":
         lead.status = "Discovered"
     db.add(OutreachEvent(lead_id=lead.id, type="unsuppress", payload={"value": value}))
     db.commit()
