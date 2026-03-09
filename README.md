@@ -146,6 +146,7 @@ Notes:
 - webhook lead lookup trims stored `leads.email` / `leads.website_domain` for legacy whitespace rows
 - admin/webhook/discover/summarize domain fallback parsing trims `website_url` first, so whitespace-padded legacy URLs still match
 - webhook duplicate-event detection trims stored `outreach_events.external_id` for legacy whitespace rows
+- webhook events with blank `event_id` now store `external_id=NULL` (avoid empty-string uniqueness collisions)
 - discover task domain/suppression matching trims and lowercases legacy stored values
 - discover suppression matching ignores blank suppression rows (prevents false suppression on no-domain leads)
 - discover lead matching trims stored `place_id` values for legacy whitespace rows
