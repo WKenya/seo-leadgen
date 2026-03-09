@@ -11,8 +11,8 @@ router = APIRouter(prefix="/artifacts", tags=["artifacts"])
 
 
 def _require_artifact_auth(authorization: str | None, settings) -> None:
-    configured_user = settings.artifacts_basic_auth_user or ""
-    configured_pass = settings.artifacts_basic_auth_pass or ""
+    configured_user = (settings.artifacts_basic_auth_user or "").strip()
+    configured_pass = (settings.artifacts_basic_auth_pass or "").strip()
     if not configured_user and not configured_pass:
         return
     if not configured_user or not configured_pass:

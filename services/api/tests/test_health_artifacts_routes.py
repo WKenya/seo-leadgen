@@ -163,6 +163,15 @@ class HealthAndArtifactRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 503, response.text)
         self.assertEqual(response.json()["detail"], "artifact_auth_not_configured")
 
+    def test_artifact_returns_503_when_basic_auth_partial_config_after_trim(self) -> None:
+        os.environ["ARTIFACTS_BASIC_AUTH_USER"] = "u"
+        os.environ["ARTIFACTS_BASIC_AUTH_PASS"] = "   "
+        self._get_settings.cache_clear()
+
+        response = self.client.get(f"/artifacts/{self.artifact_relpath}")
+        self.assertEqual(response.status_code, 503, response.text)
+        self.assertEqual(response.json()["detail"], "artifact_auth_not_configured")
+
     def test_artifact_rejects_path_escape(self) -> None:
         response = self.client.get("/artifacts/%2E%2E/etc/passwd")
         self.assertEqual(response.status_code, 400)
