@@ -389,6 +389,45 @@ class MetricsRouteTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["events_today_by_type"], {"sent": 2})
 
+    def test_metrics_summary_ignores_blank_event_types_in_buckets_and_latest(self) -> None:
+        from app.models import Lead, OutreachEvent
+
+        now = datetime.now(timezone.utc)
+        lead = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
+        self.db.add(lead)
+        self.db.commit()
+        self.db.add_all(
+            [
+                OutreachEvent(
+                    id=uuid4(),
+                    lead_id=lead.id,
+                    type="   ",
+                    provider="sendgrid",
+                    created_at=now,
+                    payload={"provider": "sendgrid", "provider_event_id": "sg-blank-1"},
+                ),
+                OutreachEvent(
+                    id=uuid4(),
+                    lead_id=lead.id,
+                    type="sent",
+                    provider="sendgrid",
+                    created_at=now - timedelta(seconds=1),
+                    payload={"provider": "sendgrid", "provider_event_id": "sg-sent-1"},
+                ),
+            ]
+        )
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary", params={"provider": "sendgrid"})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["events_today"], 2)
+        self.assertEqual(body["events_today_by_type"], {"sent": 1})
+        self.assertEqual(body["webhook_event_types_by_provider_today"], {"sendgrid": {"sent": 1}})
+        self.assertEqual(body["latest_event_types"], ["sent"])
+        self.assertEqual(body["webhook_event_types_today_for_provider"], {"sent": 1})
+        self.assertEqual(body["latest_event_types_for_provider"], ["sent"])
+
     def test_metrics_summary_provider_filter_uses_provider_scoped_latest_query(self) -> None:
         from app.models import Lead, OutreachEvent
 

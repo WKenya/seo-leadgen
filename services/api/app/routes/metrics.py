@@ -90,14 +90,18 @@ def metrics_summary(
     events_today_by_type_rows = db.execute(
         select(event_type_column.label("event_type"), func.count()).where(*today_filter).group_by(event_type_column)
     ).all()
-    events_today_by_type = {str(event_type): int(count) for event_type, count in events_today_by_type_rows}
+    events_today_by_type = {
+        str(event_type): int(count) for event_type, count in events_today_by_type_rows if str(event_type or "")
+    }
     failure_filter = _failure_event_filter()
     failures_today_by_type_rows = db.execute(
         select(event_type_column.label("event_type"), func.count())
         .where(*today_filter, failure_filter)
         .group_by(event_type_column)
     ).all()
-    failures_today_by_type = {str(event_type): int(count) for event_type, count in failures_today_by_type_rows}
+    failures_today_by_type = {
+        str(event_type): int(count) for event_type, count in failures_today_by_type_rows if str(event_type or "")
+    }
     failures_today = sum(failures_today_by_type.values())
 
     provider_rows = db.execute(
@@ -114,6 +118,8 @@ def metrics_summary(
     ).all()
     webhook_event_types_by_provider_today: dict[str, dict[str, int]] = {}
     for provider_name, event_type, count in provider_type_rows:
+        if not str(event_type or ""):
+            continue
         provider_key = str(provider_name)
         provider_bucket = webhook_event_types_by_provider_today.setdefault(provider_key, {})
         provider_bucket[str(event_type)] = int(count)
@@ -123,7 +129,7 @@ def metrics_summary(
         .order_by(OutreachEvent.created_at.desc())
         .limit(latest_limit)
     ).all()
-    latest_events = [event_type for event_type, _provider in latest_event_rows]
+    latest_events = [event_type for event_type, _provider in latest_event_rows if str(event_type or "")]
     latest_webhook_providers: list[str] = []
     seen_providers: set[str] = set()
     for _event_type, provider_name in latest_event_rows:
@@ -152,7 +158,7 @@ def metrics_summary(
             .group_by(event_type_column)
         ).all()
         webhook_event_types_today_for_provider = {
-            str(event_type): int(count) for event_type, count in provider_type_filtered_rows
+            str(event_type): int(count) for event_type, count in provider_type_filtered_rows if str(event_type or "")
         }
         provider_failure_rows = db.execute(
             select(event_type_column.label("event_type"), func.count())
@@ -160,7 +166,7 @@ def metrics_summary(
             .group_by(event_type_column)
         ).all()
         webhook_failure_types_today_for_provider = {
-            str(event_type): int(count) for event_type, count in provider_failure_rows
+            str(event_type): int(count) for event_type, count in provider_failure_rows if str(event_type or "")
         }
         webhook_failures_today_for_provider = sum(webhook_failure_types_today_for_provider.values())
         latest_event_types_for_provider = [
@@ -171,6 +177,7 @@ def metrics_summary(
                 .order_by(OutreachEvent.created_at.desc())
                 .limit(latest_limit)
             ).all()
+            if str(event_type or "")
         ]
 
     return {
