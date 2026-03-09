@@ -17,11 +17,12 @@ def _provider_expr():
 
 
 def _failure_event_filter():
+    event_type = func.lower(func.coalesce(OutreachEvent.type, ""))
     return or_(
-        OutreachEvent.type == "bounced",
-        OutreachEvent.type.like("%blocked%"),
-        OutreachEvent.type.like("%failed%"),
-        OutreachEvent.type.like("%skipped%"),
+        event_type == "bounced",
+        event_type.like("%blocked%"),
+        event_type.like("%failed%"),
+        event_type.like("%skipped%"),
     )
 
 
