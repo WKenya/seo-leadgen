@@ -8,7 +8,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -146,15 +146,25 @@ def _verify_sendgrid_webhook_signature(
 def _domain_from_url(url: str | None) -> str | None:
     if not url:
         return None
-    return urlparse(url).netloc.lower() or None
+    domain = urlparse(url).netloc.strip().lower()
+    return domain or None
+
+
+def _normalize_email_or_domain(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
 
 
 def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
-    normalized = value.lower().strip()
-    lead = db.execute(select(Lead).where(Lead.email == normalized)).scalar_one_or_none()
+    normalized = _normalize_email_or_domain(value)
+    if not normalized:
+        return None
+    lead = db.execute(select(Lead).where(func.lower(Lead.email) == normalized)).scalar_one_or_none()
     if lead is not None:
         return lead
-    lead = db.execute(select(Lead).where(Lead.website_domain == normalized)).scalar_one_or_none()
+    lead = db.execute(select(Lead).where(func.lower(Lead.website_domain) == normalized)).scalar_one_or_none()
     if lead is not None:
         return lead
     for candidate in db.execute(select(Lead).where(Lead.website_domain.is_(None), Lead.website_url.is_not(None))).scalars():
@@ -164,9 +174,12 @@ def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
 
 
 def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
-    row = db.execute(select(Suppression).where(Suppression.email_or_domain == value)).scalar_one_or_none()
+    normalized_value = _normalize_email_or_domain(value)
+    if not normalized_value:
+        return
+    row = db.execute(select(Suppression).where(func.lower(Suppression.email_or_domain) == normalized_value)).scalar_one_or_none()
     if row is None:
-        db.add(Suppression(email_or_domain=value, reason=reason))
+        db.add(Suppression(email_or_domain=normalized_value, reason=reason))
 
 
 def _map_sendgrid_event_type(value: object) -> str | None:
@@ -440,9 +453,9 @@ async def ingest_outreach_events(
             continue
 
         provider_value = (item.provider or "").strip().lower() or None
-        suppression_value = (
-            item.email_or_domain or lead.email or lead.website_domain or _domain_from_url(lead.website_url) or ""
-        ).lower()
+        suppression_value = _normalize_email_or_domain(
+            item.email_or_domain or lead.email or lead.website_domain or _domain_from_url(lead.website_url)
+        )
         if event_type in {"bounced", "opt_out"} and suppression_value:
             _upsert_suppression(db, value=suppression_value, reason=event_type)
             lead.status = "Suppressed"

@@ -213,6 +213,30 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 0)
         self.assertEqual(body["rejected_by_reason"], {"invalid_event_type": 1})
 
+    def test_webhook_token_mode_normalizes_custom_event_email_or_domain(self) -> None:
+        from app.models import Suppression
+
+        lead = self._create_lead(email="owner@acme.example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "events": [
+                    {
+                        "lead_id": str(lead.id),
+                        "event_type": "opt_out",
+                        "email_or_domain": " Owner@Acme.Example ",
+                        "event_id": "evt-case-1",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.email_or_domain, "owner@acme.example")
+
     def test_webhook_form_payload_with_invalid_utf8_returns_400(self) -> None:
         response = self.client.post(
             "/webhooks/outreach-events",
@@ -321,6 +345,24 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(payload.get("provider_event_id"), "sg-evt-1")
         self.assertEqual(payload.get("provider_event_name"), "unsubscribe")
         self.assertEqual(payload.get("provider_event_at"), "2023-11-14T22:13:20+00:00")
+
+    def test_webhook_token_mode_resolves_mixed_case_lead_email(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = self._create_lead(email="Owner@Acme.Example")
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json=[{"email": "owner@acme.example", "event": "unsubscribe", "sg_event_id": "sg-case-1"}],
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.email_or_domain, "owner@acme.example")
 
     def test_webhook_token_mode_accepts_sendgrid_dropped_event_as_bounced(self) -> None:
         from app.models import Lead, Suppression
