@@ -6,8 +6,9 @@ import httpx
 
 
 def _with_scheme(url: str, scheme: str) -> str:
-    parsed = urlparse(url if "://" in url else f"https://{url}")
-    return urlunparse((scheme, parsed.netloc, parsed.path or "/", "", parsed.query, ""))
+    normalized_url = (url or "").strip()
+    parsed = urlparse(normalized_url if "://" in normalized_url else f"https://{normalized_url}")
+    return urlunparse((scheme, parsed.netloc.strip(), (parsed.path or "/").strip() or "/", "", parsed.query, ""))
 
 
 def _classify_cert_error(exc: Exception) -> str:
