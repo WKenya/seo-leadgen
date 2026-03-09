@@ -14,6 +14,7 @@ from app.audit.tls_check import check_tls
 from app.db import SessionLocal
 from app.models import Audit, Issue, Lead
 from app.settings import get_settings
+from app.tasks.task_failures import log_task_failure_for_lead
 from app.worker import celery_app
 
 
@@ -21,17 +22,20 @@ from app.worker import celery_app
 def audit_lead(lead_id: str) -> dict[str, object]:
     settings = get_settings()
     lead_uuid = UUID(lead_id)
+    audit_id_value: str | None = None
 
-    with SessionLocal() as session:
-        lead = session.get(Lead, lead_uuid)
-        if lead is None:
-            raise RuntimeError(f"lead not found: {lead_id}")
-        if not lead.website_url:
-            raise RuntimeError(f"lead missing website_url: {lead_id}")
+    try:
+        with SessionLocal() as session:
+            lead = session.get(Lead, lead_uuid)
+            if lead is None:
+                raise RuntimeError(f"lead not found: {lead_id}")
+            if not lead.website_url:
+                raise RuntimeError(f"lead missing website_url: {lead_id}")
 
-        audit = Audit(lead_id=lead.id, started_at=datetime.now(timezone.utc))
-        session.add(audit)
-        session.flush()
+            audit = Audit(lead_id=lead.id, started_at=datetime.now(timezone.utc))
+            session.add(audit)
+            session.flush()
+            audit_id_value = str(audit.id)
 
         tls_result = check_tls(lead.website_url)
         audit_target_url = tls_result.get("final_url") or lead.website_url
@@ -213,24 +217,31 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                 )
             )
 
-        lead.status = "Audited"
-        session.commit()
-        audit_id_value = str(audit.id)
-        lead_email_value = lead.email
+            lead.status = "Audited"
+            session.commit()
+            lead_email_value = lead.email
 
-    celery_app.send_task("summarize_and_draft", kwargs={"lead_id": lead_id, "audit_id": audit_id_value})
+        celery_app.send_task("summarize_and_draft", kwargs={"lead_id": lead_id, "audit_id": audit_id_value})
 
-    return {
-        "status": "ok",
-        "lead_id": lead_id,
-        "audit_id": audit_id_value,
-        "https_ok": tls_result.get("https_ok"),
-        "cert_error": tls_result.get("cert_error"),
-        "broken_links_count": crawl_result.get("broken_links_count"),
-        "broken_link_issue_groups": len(broken_issue_groups),
-        "visited_pages": crawl_result.get("visited_pages"),
-        "lighthouse_error": lighthouse_error,
-        "lighthouse_summary": lighthouse_summary,
-        "lead_email": lead_email_value,
-        "seo_signals": seo_signals,
-    }
+        return {
+            "status": "ok",
+            "lead_id": lead_id,
+            "audit_id": audit_id_value,
+            "https_ok": tls_result.get("https_ok"),
+            "cert_error": tls_result.get("cert_error"),
+            "broken_links_count": crawl_result.get("broken_links_count"),
+            "broken_link_issue_groups": len(broken_issue_groups),
+            "visited_pages": crawl_result.get("visited_pages"),
+            "lighthouse_error": lighthouse_error,
+            "lighthouse_summary": lighthouse_summary,
+            "lead_email": lead_email_value,
+            "seo_signals": seo_signals,
+        }
+    except Exception as exc:  # noqa: BLE001
+        log_task_failure_for_lead(
+            lead_id=lead_id,
+            task_name="audit_lead",
+            error=exc,
+            context={"audit_id": audit_id_value},
+        )
+        raise

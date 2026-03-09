@@ -11,6 +11,7 @@ from app.llm.schemas import DraftOutput, QuickWin
 from app.models import Audit, EmailDraft, Issue, Lead, OutreachEvent, Suppression
 from app.settings import get_settings
 from app.db import SessionLocal
+from app.tasks.task_failures import log_task_failure_for_lead
 from app.worker import celery_app
 
 
@@ -151,19 +152,21 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
     settings = get_settings()
     lead_uuid = UUID(lead_id)
     audit_uuid = UUID(audit_id)
+    draft_id: str | None = None
 
-    with SessionLocal() as session:
-        lead = session.get(Lead, lead_uuid)
-        if lead is None:
-            raise RuntimeError(f"lead not found: {lead_id}")
-        audit = session.get(Audit, audit_uuid)
-        if audit is None or audit.lead_id != lead.id:
-            raise RuntimeError(f"audit not found for lead: {audit_id}")
+    try:
+        with SessionLocal() as session:
+            lead = session.get(Lead, lead_uuid)
+            if lead is None:
+                raise RuntimeError(f"lead not found: {lead_id}")
+            audit = session.get(Audit, audit_uuid)
+            if audit is None or audit.lead_id != lead.id:
+                raise RuntimeError(f"audit not found for lead: {audit_id}")
 
-        if _is_suppressed(session, lead):
-            lead.status = "Suppressed"
-            session.commit()
-            return {"status": "suppressed", "lead_id": lead_id, "audit_id": audit_id}
+            if _is_suppressed(session, lead):
+                lead.status = "Suppressed"
+                session.commit()
+                return {"status": "suppressed", "lead_id": lead_id, "audit_id": audit_id}
 
         issues = (
             session.execute(select(Issue).where(Issue.audit_id == audit.id).order_by(Issue.severity.desc()))
@@ -224,15 +227,23 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
         )
         session.commit()
 
-    celery_app.send_task("sync_notion", kwargs={"lead_id": lead_id, "audit_id": audit_id, "draft_id": draft_id})
-    celery_app.send_task("create_gmail_draft", kwargs={"draft_id": draft_id})
+        celery_app.send_task("sync_notion", kwargs={"lead_id": lead_id, "audit_id": audit_id, "draft_id": draft_id})
+        celery_app.send_task("create_gmail_draft", kwargs={"draft_id": draft_id})
 
-    return {
-        "status": "ok",
-        "lead_id": lead_id,
-        "audit_id": audit_id,
-        "draft_id": draft_id,
-        "claims_used_count": len(draft_output.claims_used),
-        "llm_mode": llm_mode,
-        "llm_error": llm_error,
-    }
+        return {
+            "status": "ok",
+            "lead_id": lead_id,
+            "audit_id": audit_id,
+            "draft_id": draft_id,
+            "claims_used_count": len(draft_output.claims_used),
+            "llm_mode": llm_mode,
+            "llm_error": llm_error,
+        }
+    except Exception as exc:  # noqa: BLE001
+        log_task_failure_for_lead(
+            lead_id=lead_id,
+            task_name="summarize_and_draft",
+            error=exc,
+            context={"audit_id": audit_id, "draft_id": draft_id},
+        )
+        raise
