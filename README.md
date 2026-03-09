@@ -135,7 +135,7 @@ Notes:
 - API emits structured JSON request logs (`event=request`, method/path/status/duration, `x-request-id`)
 - lead-scoped worker task exceptions persist as `outreach_events.type=task_failed` with task/error context
 - suppression keys are normalized (trim + lowercase) in admin/webhook flows; matching is trim+case-insensitive for legacy rows
-- metrics `provider` filter is case-insensitive (`sendgrid` matches stored `SendGrid`)
+- metrics/read `provider` filters are trim+case-insensitive (`sendgrid` matches stored `SendGrid` / `  SendGrid  `)
 - metrics failure counting is case-insensitive for event types (legacy mixed-case `*_blocked_*` / `*_skipped_*` rows are included)
 - artifacts Basic auth scheme is case-insensitive (`basic` and `Basic` both accepted)
 - artifacts route returns `503 artifact_auth_not_configured` when only one of `ARTIFACTS_BASIC_AUTH_USER/PASS` is set
