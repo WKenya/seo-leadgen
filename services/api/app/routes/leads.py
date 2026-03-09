@@ -24,7 +24,7 @@ def list_leads(
     q_filter = (q or "").strip() or None
     base = select(Lead)
     if status_filter:
-        base = base.where(Lead.status == status_filter)
+        base = base.where(func.lower(func.coalesce(Lead.status, "")) == status_filter.lower())
     if q_filter:
         like = f"%{q_filter}%"
         base = base.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)))
