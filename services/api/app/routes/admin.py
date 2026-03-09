@@ -45,24 +45,39 @@ class AuditBatchRequest(BaseModel):
 
 def _lead_suppression_key(lead: Lead) -> str | None:
     if lead.email:
-        return lead.email.lower()
+        return lead.email.strip().lower()
     if lead.website_domain:
-        return lead.website_domain.lower()
+        return lead.website_domain.strip().lower()
     if lead.website_url:
-        return urlparse(lead.website_url).netloc.lower() or None
+        domain = urlparse(lead.website_url).netloc.strip().lower()
+        return domain or None
     return None
+
+
+def _normalize_suppression_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    return normalized or None
 
 
 def _is_suppressed(db: Session, lead: Lead) -> bool:
     keys: list[str] = []
     if lead.email:
-        keys.append(lead.email.lower())
-    domain = (lead.website_domain or "").lower() or (urlparse(lead.website_url).netloc.lower() if lead.website_url else None)
+        normalized_email = _normalize_suppression_value(lead.email)
+        if normalized_email:
+            keys.append(normalized_email)
+    domain = _normalize_suppression_value(lead.website_domain) or (
+        _normalize_suppression_value(urlparse(lead.website_url).netloc) if lead.website_url else None
+    )
     if domain:
         keys.append(domain)
     if not keys:
         return False
-    return db.execute(select(Suppression).where(Suppression.email_or_domain.in_(keys))).scalar_one_or_none() is not None
+    return (
+        db.execute(select(Suppression).where(func.lower(Suppression.email_or_domain).in_(keys))).scalar_one_or_none()
+        is not None
+    )
 
 
 def _sent_count_today(db: Session) -> int:
@@ -74,9 +89,14 @@ def _sent_count_today(db: Session) -> int:
 
 
 def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
-    suppression = db.execute(select(Suppression).where(Suppression.email_or_domain == value)).scalar_one_or_none()
+    normalized_value = _normalize_suppression_value(value)
+    if not normalized_value:
+        return
+    suppression = db.execute(
+        select(Suppression).where(func.lower(Suppression.email_or_domain) == normalized_value)
+    ).scalar_one_or_none()
     if suppression is None:
-        db.add(Suppression(email_or_domain=value, reason=reason))
+        db.add(Suppression(email_or_domain=normalized_value, reason=reason))
 
 
 @router.post("/run-discovery")
@@ -239,7 +259,7 @@ def record_event(
     if event_type not in {"replied", "bounced", "opt_out", "manual"}:
         return {"lead_id": str(lead_id), "status": "invalid_event_type"}
 
-    suppression_target = payload.email_or_domain or _lead_suppression_key(lead)
+    suppression_target = _normalize_suppression_value(payload.email_or_domain) or _lead_suppression_key(lead)
     should_suppress = payload.suppress
     if should_suppress is None:
         should_suppress = event_type in {"bounced", "opt_out"}
@@ -275,11 +295,11 @@ def unsuppress_lead(
     if lead is None:
         return {"lead_id": str(lead_id), "status": "not_found"}
 
-    value = payload.email_or_domain or _lead_suppression_key(lead)
+    value = _normalize_suppression_value(payload.email_or_domain) or _lead_suppression_key(lead)
     if not value:
         return {"lead_id": str(lead_id), "status": "missing_suppression_target"}
 
-    suppression = db.execute(select(Suppression).where(Suppression.email_or_domain == value)).scalar_one_or_none()
+    suppression = db.execute(select(Suppression).where(func.lower(Suppression.email_or_domain) == value)).scalar_one_or_none()
     if suppression is None:
         return {"lead_id": str(lead_id), "status": "not_suppressed"}
 
@@ -301,9 +321,7 @@ def mark_optout(
     if lead is None:
         return {"lead_id": str(lead_id), "status": "not_found"}
 
-    value = payload.email_or_domain
-    if not value:
-        value = _lead_suppression_key(lead)
+    value = _normalize_suppression_value(payload.email_or_domain) or _lead_suppression_key(lead)
     if not value:
         return {"lead_id": str(lead_id), "status": "missing_suppression_target"}
 

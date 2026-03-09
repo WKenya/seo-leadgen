@@ -146,6 +146,20 @@ class AdminRouteTests(unittest.TestCase):
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].type, "approved_blocked_suppressed")
 
+    def test_approve_draft_blocked_when_suppression_row_is_mixed_case(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, draft = self._create_lead_with_draft()
+        self.db.add(Suppression(email_or_domain="Owner@Acme.Example", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/approve-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        refreshed_lead = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed_lead.status, "Suppressed")
+
     def test_send_draft_requires_approval(self) -> None:
         _, _, draft = self._create_lead_with_draft()
         response = self.client.post(f"/admin/send-draft/{draft.id}")
@@ -263,6 +277,21 @@ class AdminRouteTests(unittest.TestCase):
         events = self.db.execute(select(OutreachEvent)).scalars().all()
         self.assertTrue(any(event.type == "opt_out" for event in events))
         self.assertTrue(any(event.type == "unsuppress" for event in events))
+
+    def test_mark_optout_normalizes_email_or_domain(self) -> None:
+        from app.models import Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        response = self.client.post(
+            f"/admin/mark-optout/{lead.id}",
+            json={"reason": "manual", "email_or_domain": " Owner@Acme.Example "},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+        self.assertEqual(suppression.email_or_domain, "owner@acme.example")
 
     def test_run_discovery_batch_queues_nonblank_categories(self) -> None:
         calls: list[tuple[str, dict[str, object] | None]] = []
