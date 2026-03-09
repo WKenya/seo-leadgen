@@ -20,11 +20,13 @@ def list_leads(
     sort: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
+    status_filter = (status or "").strip() or None
+    q_filter = (q or "").strip() or None
     base = select(Lead)
-    if status:
-        base = base.where(Lead.status == status)
-    if q:
-        like = f"%{q}%"
+    if status_filter:
+        base = base.where(Lead.status == status_filter)
+    if q_filter:
+        like = f"%{q_filter}%"
         base = base.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)))
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
     order_column = Lead.created_at.asc() if sort == "asc" else Lead.created_at.desc()
@@ -38,8 +40,8 @@ def list_leads(
         "total": total,
         "has_more": (offset + count) < total,
         "next_offset": (offset + count) if (offset + count) < total else None,
-        "status_filter": status,
-        "q": q,
+        "status_filter": status_filter,
+        "q": q_filter,
         "sort": sort,
         "limit": limit,
         "offset": offset,

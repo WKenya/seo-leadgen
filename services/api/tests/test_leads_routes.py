@@ -136,6 +136,19 @@ class LeadRouteTests(unittest.TestCase):
         self.assertIsNone(body2["next_offset"])
         self.assertEqual(len(body2["items"]), 0)
 
+    def test_list_leads_trims_status_and_q_filters(self) -> None:
+        now = datetime.now(timezone.utc)
+        self._create_lead(name="Gamma HVAC", website_url="https://gamma.example", status="Suppressed", created_at=now)
+
+        response = self.client.get("/leads", params={"status": " Suppressed ", "q": "  hvac  ", "limit": 10, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["status_filter"], "Suppressed")
+        self.assertEqual(body["q"], "hvac")
+        self.assertEqual(body["total"], 1)
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["items"][0]["name"], "Gamma HVAC")
+
     def test_get_lead_returns_404_when_missing(self) -> None:
         response = self.client.get(f"/leads/{uuid4()}")
         self.assertEqual(response.status_code, 404)
