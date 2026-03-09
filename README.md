@@ -147,6 +147,7 @@ Notes:
 - admin/webhook/discover/summarize domain fallback parsing trims `website_url` first, so whitespace-padded legacy URLs still match
 - webhook duplicate-event detection trims stored `outreach_events.external_id` for legacy whitespace rows
 - discover task domain/suppression matching trims and lowercases legacy stored values
+- discover suppression matching ignores blank suppression rows (prevents false suppression on no-domain leads)
 - discover lead matching trims stored `place_id` values for legacy whitespace rows
 - summarize suppression check now considers `lead.website_domain` when `website_url` is missing
 - crawler internal-link host classification is trim+case-insensitive (mixed-case/whitespace URLs still traverse as internal)
