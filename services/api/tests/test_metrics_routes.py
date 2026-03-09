@@ -243,6 +243,34 @@ class MetricsRouteTests(unittest.TestCase):
         self.assertEqual(body["webhook_failures_today_for_provider"], 1)
         self.assertEqual(body["webhook_failure_types_today_for_provider"], {"bounced": 1})
 
+    def test_metrics_summary_provider_filter_matches_whitespace_padded_provider_values(self) -> None:
+        from app.models import Lead, OutreachEvent
+
+        now = datetime.now(timezone.utc)
+        lead = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
+        self.db.add(lead)
+        self.db.commit()
+        self.db.add(
+            OutreachEvent(
+                id=uuid4(),
+                lead_id=lead.id,
+                type="bounced",
+                provider="  SendGrid  ",
+                created_at=now,
+                payload={"provider": "SendGrid", "provider_event_id": "sg-space-1"},
+            )
+        )
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary", params={"provider": "sendgrid"})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["provider_filter"], "sendgrid")
+        self.assertEqual(body["webhook_events_today_for_provider"], 1)
+        self.assertEqual(body["webhook_event_types_today_for_provider"], {"bounced": 1})
+        self.assertEqual(body["webhook_failures_today_for_provider"], 1)
+        self.assertEqual(body["webhook_failure_types_today_for_provider"], {"bounced": 1})
+
     def test_metrics_summary_latest_limit_trims_latest_lists(self) -> None:
         from app.models import Lead, OutreachEvent
 
