@@ -217,9 +217,9 @@ def audit_lead(lead_id: str) -> dict[str, object]:
                 )
             )
 
-            lead.status = "Audited"
-            session.commit()
-            lead_email_value = lead.email
+        lead.status = "Audited"
+        session.commit()
+        lead_email_value = lead.email
 
         celery_app.send_task("summarize_and_draft", kwargs={"lead_id": lead_id, "audit_id": audit_id_value})
 
