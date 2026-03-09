@@ -336,7 +336,7 @@ class MetricsRouteTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["events_today"], 1)
         self.assertEqual(body["failures_today"], 1)
-        self.assertEqual(body["failures_today_by_type"], {"SeNd_BLoCkEd_Cap": 1})
+        self.assertEqual(body["failures_today_by_type"], {"send_blocked_cap": 1})
 
     def test_metrics_summary_counts_whitespace_padded_failure_types(self) -> None:
         from app.models import Lead, OutreachEvent
@@ -353,7 +353,27 @@ class MetricsRouteTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["events_today"], 1)
         self.assertEqual(body["failures_today"], 1)
-        self.assertEqual(body["failures_today_by_type"], {"  send_blocked_cap  ": 1})
+        self.assertEqual(body["failures_today_by_type"], {"send_blocked_cap": 1})
+
+    def test_metrics_summary_normalizes_event_type_buckets(self) -> None:
+        from app.models import Lead, OutreachEvent
+
+        now = datetime.now(timezone.utc)
+        lead = Lead(id=uuid4(), name="A", source="x", website_url="https://a.example", status="Discovered")
+        self.db.add(lead)
+        self.db.commit()
+        self.db.add_all(
+            [
+                OutreachEvent(id=uuid4(), lead_id=lead.id, type="SeNt", created_at=now, payload={}),
+                OutreachEvent(id=uuid4(), lead_id=lead.id, type="  sent  ", created_at=now, payload={}),
+            ]
+        )
+        self.db.commit()
+
+        response = self.client.get("/metrics/summary")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["events_today_by_type"], {"sent": 2})
 
     def test_metrics_summary_provider_filter_uses_provider_scoped_latest_query(self) -> None:
         from app.models import Lead, OutreachEvent

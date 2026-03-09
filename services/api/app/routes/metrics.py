@@ -16,8 +16,12 @@ def _provider_expr():
     return func.lower(func.trim(func.coalesce(OutreachEvent.provider, "")))
 
 
+def _event_type_expr():
+    return func.lower(func.trim(func.coalesce(OutreachEvent.type, "")))
+
+
 def _failure_event_filter():
-    event_type = func.lower(func.trim(func.coalesce(OutreachEvent.type, "")))
+    event_type = _event_type_expr()
     return or_(
         event_type == "bounced",
         event_type.like("%blocked%"),
@@ -59,15 +63,18 @@ def metrics_summary(
     )
     today_filter = (OutreachEvent.created_at >= start, OutreachEvent.created_at < end)
     provider_column = _provider_expr()
+    event_type_column = _event_type_expr()
 
     events_today = int(db.execute(select(func.count()).select_from(OutreachEvent).where(*today_filter)).scalar_one())
     events_today_by_type_rows = db.execute(
-        select(OutreachEvent.type, func.count()).where(*today_filter).group_by(OutreachEvent.type)
+        select(event_type_column.label("event_type"), func.count()).where(*today_filter).group_by(event_type_column)
     ).all()
     events_today_by_type = {str(event_type): int(count) for event_type, count in events_today_by_type_rows}
     failure_filter = _failure_event_filter()
     failures_today_by_type_rows = db.execute(
-        select(OutreachEvent.type, func.count()).where(*today_filter, failure_filter).group_by(OutreachEvent.type)
+        select(event_type_column.label("event_type"), func.count())
+        .where(*today_filter, failure_filter)
+        .group_by(event_type_column)
     ).all()
     failures_today_by_type = {str(event_type): int(count) for event_type, count in failures_today_by_type_rows}
     failures_today = sum(failures_today_by_type.values())
@@ -80,9 +87,9 @@ def metrics_summary(
     webhook_events_by_provider_today = {str(provider): int(count) for provider, count in provider_rows}
 
     provider_type_rows = db.execute(
-        select(provider_column.label("provider"), OutreachEvent.type, func.count())
+        select(provider_column.label("provider"), event_type_column.label("event_type"), func.count())
         .where(*today_filter, provider_column != "")
-        .group_by(provider_column, OutreachEvent.type)
+        .group_by(provider_column, event_type_column)
     ).all()
     webhook_event_types_by_provider_today: dict[str, dict[str, int]] = {}
     for provider_name, event_type, count in provider_type_rows:
@@ -91,7 +98,7 @@ def metrics_summary(
         provider_bucket[str(event_type)] = int(count)
 
     latest_event_rows = db.execute(
-        select(OutreachEvent.type, provider_column.label("provider"))
+        select(event_type_column.label("event_type"), provider_column.label("provider"))
         .order_by(OutreachEvent.created_at.desc())
         .limit(latest_limit)
     ).all()
@@ -119,17 +126,17 @@ def metrics_summary(
             ).scalar_one()
         )
         provider_type_filtered_rows = db.execute(
-            select(OutreachEvent.type, func.count())
+            select(event_type_column.label("event_type"), func.count())
             .where(*today_filter, provider_column == provider_filter)
-            .group_by(OutreachEvent.type)
+            .group_by(event_type_column)
         ).all()
         webhook_event_types_today_for_provider = {
             str(event_type): int(count) for event_type, count in provider_type_filtered_rows
         }
         provider_failure_rows = db.execute(
-            select(OutreachEvent.type, func.count())
+            select(event_type_column.label("event_type"), func.count())
             .where(*today_filter, provider_column == provider_filter, failure_filter)
-            .group_by(OutreachEvent.type)
+            .group_by(event_type_column)
         ).all()
         webhook_failure_types_today_for_provider = {
             str(event_type): int(count) for event_type, count in provider_failure_rows
@@ -138,7 +145,7 @@ def metrics_summary(
         latest_event_types_for_provider = [
             event_type
             for event_type, in db.execute(
-                select(OutreachEvent.type)
+                select(event_type_column.label("event_type"))
                 .where(provider_column == provider_filter)
                 .order_by(OutreachEvent.created_at.desc())
                 .limit(latest_limit)
