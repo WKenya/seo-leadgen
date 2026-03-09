@@ -111,6 +111,19 @@ class AuditTaskTests(unittest.TestCase):
         self.assertEqual(lead.status, "Audited")
         send_task_mock.assert_called_once()
 
+    def test_audit_lead_invalid_uuid_logs_failure(self) -> None:
+        with (
+            patch.object(audit, "get_settings"),
+            patch.object(audit, "log_task_failure_for_lead", return_value=True) as log_failure_mock,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "invalid lead_id"):
+                audit.audit_lead("not-a-uuid")
+
+        log_failure_mock.assert_called_once()
+        kwargs = log_failure_mock.call_args.kwargs
+        self.assertEqual(kwargs["lead_id"], "not-a-uuid")
+        self.assertEqual(kwargs["task_name"], "audit_lead")
+
 
 if __name__ == "__main__":
     unittest.main()

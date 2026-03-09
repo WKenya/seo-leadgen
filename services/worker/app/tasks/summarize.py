@@ -150,11 +150,18 @@ def _build_fallback_draft(lead: Lead, audit: Audit, issues: list[Issue], setting
 @celery_app.task(name="summarize_and_draft")
 def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
     settings = get_settings()
-    lead_uuid = UUID(lead_id)
-    audit_uuid = UUID(audit_id)
     draft_id: str | None = None
 
     try:
+        try:
+            lead_uuid = UUID(lead_id)
+        except ValueError as exc:
+            raise RuntimeError(f"invalid lead_id: {lead_id}") from exc
+        try:
+            audit_uuid = UUID(audit_id)
+        except ValueError as exc:
+            raise RuntimeError(f"invalid audit_id: {audit_id}") from exc
+
         with SessionLocal() as session:
             lead = session.get(Lead, lead_uuid)
             if lead is None:

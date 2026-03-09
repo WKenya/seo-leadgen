@@ -120,6 +120,19 @@ class SummarizeTaskTests(unittest.TestCase):
         self.assertTrue(any(isinstance(item, summarize.EmailDraft) for item in fake_session.added))
         self.assertEqual(send_task_mock.call_count, 2)
 
+    def test_summarize_invalid_lead_uuid_logs_failure(self) -> None:
+        with (
+            patch.object(summarize, "get_settings"),
+            patch.object(summarize, "log_task_failure_for_lead", return_value=True) as log_failure_mock,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "invalid lead_id"):
+                summarize.summarize_and_draft("not-a-uuid", str(uuid4()))
+
+        log_failure_mock.assert_called_once()
+        kwargs = log_failure_mock.call_args.kwargs
+        self.assertEqual(kwargs["lead_id"], "not-a-uuid")
+        self.assertEqual(kwargs["task_name"], "summarize_and_draft")
+
 
 if __name__ == "__main__":
     unittest.main()

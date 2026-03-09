@@ -21,10 +21,14 @@ from app.worker import celery_app
 @celery_app.task(name="audit_lead")
 def audit_lead(lead_id: str) -> dict[str, object]:
     settings = get_settings()
-    lead_uuid = UUID(lead_id)
     audit_id_value: str | None = None
 
     try:
+        try:
+            lead_uuid = UUID(lead_id)
+        except ValueError as exc:
+            raise RuntimeError(f"invalid lead_id: {lead_id}") from exc
+
         with SessionLocal() as session:
             lead = session.get(Lead, lead_uuid)
             if lead is None:
