@@ -140,6 +140,7 @@ Notes:
 - artifacts Basic auth scheme is case-insensitive (`basic` and `Basic` both accepted)
 - artifacts route returns `503 artifact_auth_not_configured` when only one of `ARTIFACTS_BASIC_AUTH_USER/PASS` is set
 - webhook lead lookup trims stored `leads.email` / `leads.website_domain` for legacy whitespace rows
+- webhook duplicate-event detection trims stored `outreach_events.external_id` for legacy whitespace rows
 - discover task domain/suppression matching trims and lowercases legacy stored values
 - read route event filters are case-insensitive for both `event_type` and `provider` (legacy mixed-case rows still match)
 - `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
