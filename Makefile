@@ -18,7 +18,7 @@ UV ?= uv
 NPM ?= npm
 HAS_COMPOSE := $(shell (command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1) && echo yes || echo no)
 
-.PHONY: help doctor docs-list require-compose require-compose-engine env install install-api install-worker install-audit build up up-nobuild standup standup-nobuild down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test gate-local gate-container
+.PHONY: help doctor docs-list require-compose require-compose-engine wait-db env install install-api install-worker install-audit build up up-nobuild standup standup-nobuild down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test gate-local gate-container
 
 help:
 	@printf "%s\n" \
@@ -36,6 +36,7 @@ help:
 	"make gate-container - container verification gate (standup + smoke + smoke-e2e)" \
 	"make down          - stop docker stack" \
 	"make logs          - tail all container logs" \
+	"make wait-db       - wait until db accepts connections" \
 	"make migrate       - run alembic migrations in worker container" \
 	"make migrate-local - run alembic migrations locally via uv" \
 	"make api-dev       - run api locally (uv)" \
@@ -132,7 +133,19 @@ logs-audit: require-compose-engine
 logs-db: require-compose-engine
 	$(COMPOSE) logs -f db redis
 
-migrate: env require-compose-engine
+wait-db: require-compose-engine
+	@attempt=0; \
+	until $(COMPOSE) exec -T db pg_isready -U postgres -d seo_lead >/dev/null 2>&1; do \
+		attempt=$$((attempt + 1)); \
+		if [ "$$attempt" -ge 30 ]; then \
+			echo "db not ready after 60s"; \
+			$(COMPOSE) logs --tail=40 db; \
+			exit 2; \
+		fi; \
+		sleep 2; \
+	done
+
+migrate: env require-compose-engine wait-db
 	$(COMPOSE) exec -T worker uv run alembic -c /app/alembic.ini upgrade head
 
 migrate-local: env
