@@ -306,6 +306,32 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(len(mixed_items), 1)
         self.assertEqual(mixed_items[0]["provider"], "mailgun")
 
+    def test_list_events_provider_filter_matches_mixed_case_stored_provider(self) -> None:
+        from app.models import OutreachEvent
+
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+        legacy_event = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="manual",
+            provider="MaIlGuN",
+            payload={"provider": "mailgun", "provider_event_id": "mg-legacy-1"},
+            created_at=datetime.now(timezone.utc),
+        )
+        self.db.add(legacy_event)
+        self.db.commit()
+
+        response = self.client.get("/events", params={"provider": "mailgun", "limit": 20, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        items = response.json()["items"]
+        self.assertTrue(any(item["id"] == str(legacy_event.id) for item in items))
+
+        lead_response = self.client.get(f"/leads/{lead1.id}/events", params={"provider": "mailgun", "limit": 20, "offset": 0})
+        self.assertEqual(lead_response.status_code, 200, lead_response.text)
+        lead_items = lead_response.json()["items"]
+        self.assertTrue(any(item["id"] == str(legacy_event.id) for item in lead_items))
+
     def test_list_events_and_lead_events_support_offset(self) -> None:
         seeded = self._seed_lead_bundle()
         lead1 = seeded["lead1"]

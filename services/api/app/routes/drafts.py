@@ -22,7 +22,7 @@ def _apply_event_filters(
         stmt = stmt.where(OutreachEvent.type == event_type)
     if provider:
         provider_value = provider.strip().lower()
-        stmt = stmt.where(OutreachEvent.provider == provider_value)
+        stmt = stmt.where(func.lower(func.coalesce(OutreachEvent.provider, "")) == provider_value)
     return stmt
 
 
