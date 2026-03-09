@@ -3,7 +3,7 @@ from __future__ import annotations
 from urllib.parse import urlparse
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.drafts import build_claims_used, extract_issue_proof, has_issue_proof, sanitize_claims_used
 from app.llm.openai_client import generate_draft_with_openai
@@ -30,7 +30,7 @@ def _is_suppressed(session, lead: Lead) -> bool:
         values.append(domain)
     if not values:
         return False
-    row = session.execute(select(Suppression).where(Suppression.email_or_domain.in_(values))).scalar_one_or_none()
+    row = session.execute(select(Suppression).where(func.lower(Suppression.email_or_domain).in_(values))).scalar_one_or_none()
     return row is not None
 
 

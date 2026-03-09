@@ -67,6 +67,30 @@ class _FakeSession:
         self._assert_open()
 
 
+class _FakeScalarResult:
+    def __init__(self, row):  # noqa: ANN001
+        self.row = row
+
+    def scalar_one_or_none(self):  # noqa: ANN001
+        return self.row
+
+
+class _CaseAwareSuppressionSession:
+    def __init__(self, stored_values: list[str]):
+        self.stored_values = stored_values
+
+    def execute(self, statement):  # noqa: ANN001
+        where = list(statement._where_criteria)
+        criterion = where[0]
+        is_lower_query = getattr(criterion.left, "name", "") == "lower"
+        candidates = [str(value) for value in criterion.right.value]
+        for stored in self.stored_values:
+            probe = stored.lower() if is_lower_query else stored
+            if probe in candidates:
+                return _FakeScalarResult(object())
+        return _FakeScalarResult(None)
+
+
 class SummarizeTaskTests(unittest.TestCase):
     def test_summarize_uses_session_only_inside_context(self) -> None:
         lead_id = uuid4()
@@ -132,6 +156,19 @@ class SummarizeTaskTests(unittest.TestCase):
         kwargs = log_failure_mock.call_args.kwargs
         self.assertEqual(kwargs["lead_id"], "not-a-uuid")
         self.assertEqual(kwargs["task_name"], "summarize_and_draft")
+
+    def test_is_suppressed_matches_mixed_case_stored_values(self) -> None:
+        lead = summarize.Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="test",
+            website_url="https://acme.example",
+            email="owner@acme.example",
+            status="Audited",
+        )
+        session = _CaseAwareSuppressionSession(stored_values=["Owner@Acme.Example"])
+        self.assertTrue(summarize._is_suppressed(session, lead))
 
 
 if __name__ == "__main__":
