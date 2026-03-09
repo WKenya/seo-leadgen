@@ -332,6 +332,15 @@ class ReadRouteTests(unittest.TestCase):
         lead_items = lead_response.json()["items"]
         self.assertTrue(any(item["id"] == str(legacy_event.id) for item in lead_items))
 
+    def test_list_events_ignores_blank_provider_and_event_type_filters(self) -> None:
+        self._seed_lead_bundle()
+
+        response = self.client.get("/events", params={"provider": "   ", "event_type": "   ", "limit": 10, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["count"], 3)
+
     def test_list_events_and_lead_events_support_offset(self) -> None:
         seeded = self._seed_lead_bundle()
         lead1 = seeded["lead1"]

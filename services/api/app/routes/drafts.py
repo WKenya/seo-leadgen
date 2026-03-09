@@ -18,10 +18,11 @@ def _apply_event_filters(
     provider: str | None,
 ):
     stmt = base_stmt
-    if event_type:
-        stmt = stmt.where(OutreachEvent.type == event_type)
-    if provider:
-        provider_value = provider.strip().lower()
+    event_type_value = (event_type or "").strip().lower()
+    if event_type_value:
+        stmt = stmt.where(OutreachEvent.type == event_type_value)
+    provider_value = (provider or "").strip().lower()
+    if provider_value:
         stmt = stmt.where(func.lower(func.coalesce(OutreachEvent.provider, "")) == provider_value)
     return stmt
 
