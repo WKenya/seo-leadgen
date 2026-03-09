@@ -328,6 +328,24 @@ def _run_checks(base_url: str, fixture: SeedFixture) -> None:
     _require((pipeline.get("latest_draft") or {}).get("id") == fixture.draft_id, "pipeline latest_draft mismatch")
 
     metrics = _http_json(base_url, "/metrics/summary", {"provider": "mailgun", "latest_limit": "5"})
+    for key in (
+        "audits_today",
+        "drafts_created_today",
+        "drafts_sent_today",
+        "events_today",
+        "failures_today",
+    ):
+        value = metrics.get(key)
+        _require(isinstance(value, int) and value >= 0, f"metrics {key} missing/invalid")
+    failure_types = metrics.get("failures_today_by_type")
+    _require(isinstance(failure_types, dict), "metrics failures_today_by_type missing")
+    provider_failure_count = metrics.get("webhook_failures_today_for_provider")
+    _require(
+        isinstance(provider_failure_count, int) and provider_failure_count >= 0,
+        "metrics provider failure count missing",
+    )
+    provider_failure_types = metrics.get("webhook_failure_types_today_for_provider")
+    _require(isinstance(provider_failure_types, dict), "metrics provider failure types missing")
     provider_count = metrics.get("webhook_events_today_for_provider")
     _require(isinstance(provider_count, int) and provider_count >= 1, "metrics provider count missing")
 
