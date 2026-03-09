@@ -288,6 +288,34 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row.email_or_domain, "owner@acme.example")
 
+    def test_webhook_token_mode_falls_back_when_lead_email_is_whitespace(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = Lead(
+            id=uuid4(),
+            name="Whitespace Email",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            website_domain="  Acme.Example  ",
+            email="   ",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"events": [{"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-fallback-1"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.email_or_domain, "acme.example")
+
     def test_webhook_token_mode_avoids_duplicate_with_legacy_whitespace_suppression(self) -> None:
         from app.models import Suppression
 

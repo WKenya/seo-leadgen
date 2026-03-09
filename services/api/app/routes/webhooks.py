@@ -160,6 +160,14 @@ def _normalize_email_or_domain(value: str | None) -> str | None:
     return normalized or None
 
 
+def _first_normalized_email_or_domain(*values: str | None) -> str | None:
+    for value in values:
+        normalized = _normalize_email_or_domain(value)
+        if normalized:
+            return normalized
+    return None
+
+
 def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
     normalized = _normalize_email_or_domain(value)
     if not normalized:
@@ -466,8 +474,11 @@ async def ingest_outreach_events(
             continue
 
         provider_value = (item.provider or "").strip().lower() or None
-        suppression_value = _normalize_email_or_domain(
-            item.email_or_domain or lead.email or lead.website_domain or _domain_from_url(lead.website_url)
+        suppression_value = _first_normalized_email_or_domain(
+            item.email_or_domain,
+            lead.email,
+            lead.website_domain,
+            _domain_from_url(lead.website_url),
         )
         if event_type in {"bounced", "opt_out"} and suppression_value:
             _upsert_suppression(db, value=suppression_value, reason=event_type)
