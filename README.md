@@ -130,6 +130,7 @@ Admin triggers / review controls:
 Notes:
 - discovery uses Google Nearby Search when `radius_meters` > 0 (geocoded city center), then falls back to Text Search if needed
 - audit checks now include basic SEO hygiene on the audited homepage (title/meta/canonical/robots noindex)
+- audit TLS URL normalization trims whitespace-padded host/url inputs before probe requests
 - crawl robots policy defaults to on (`CRAWL_RESPECT_ROBOTS=1`) and can be toggled if needed
 - broken-link issues are aggregated by target URL/status (repeat count in issue title) to reduce noisy duplicates
 - API emits structured JSON request logs (`event=request`, method/path/status/duration, `x-request-id`)
