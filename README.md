@@ -134,6 +134,9 @@ Notes:
 - broken-link issues are aggregated by target URL/status (repeat count in issue title) to reduce noisy duplicates
 - API emits structured JSON request logs (`event=request`, method/path/status/duration, `x-request-id`)
 - lead-scoped worker task exceptions persist as `outreach_events.type=task_failed` with task/error context
+- suppression keys are normalized (trim + lowercase) in admin/webhook flows; matching is case-insensitive for legacy mixed-case rows
+- metrics `provider` filter is case-insensitive (`sendgrid` matches stored `SendGrid`)
+- artifacts Basic auth scheme is case-insensitive (`basic` and `Basic` both accepted)
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
 - screenshot capture uses Playwright in worker; if browser/runtime missing, audit stores a screenshot error instead of failing the whole audit
