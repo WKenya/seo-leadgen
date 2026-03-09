@@ -168,64 +168,64 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
                 session.commit()
                 return {"status": "suppressed", "lead_id": lead_id, "audit_id": audit_id}
 
-        issues = (
-            session.execute(select(Issue).where(Issue.audit_id == audit.id).order_by(Issue.severity.desc()))
-            .scalars()
-            .all()
-        )
-        llm_mode = "fallback"
-        llm_error = None
-        draft_output: DraftOutput
-        if settings.openai_api_key and settings.openai_model:
-            try:
-                draft_output = generate_draft_with_openai(
-                    api_key=settings.openai_api_key,
-                    model=settings.openai_model,
-                    base_url=settings.openai_base_url,
-                    lead_name=lead.name,
-                    audit_payload=_audit_payload_for_llm(lead, audit, issues, settings),
-                )
-                draft_output.claims_used = sanitize_claims_used(draft_output.claims_used, issues)
-                llm_mode = "openai"
-            except Exception as exc:  # noqa: BLE001
-                llm_error = str(exc)
+            issues = (
+                session.execute(select(Issue).where(Issue.audit_id == audit.id).order_by(Issue.severity.desc()))
+                .scalars()
+                .all()
+            )
+            llm_mode = "fallback"
+            llm_error = None
+            draft_output: DraftOutput
+            if settings.openai_api_key and settings.openai_model:
+                try:
+                    draft_output = generate_draft_with_openai(
+                        api_key=settings.openai_api_key,
+                        model=settings.openai_model,
+                        base_url=settings.openai_base_url,
+                        lead_name=lead.name,
+                        audit_payload=_audit_payload_for_llm(lead, audit, issues, settings),
+                    )
+                    draft_output.claims_used = sanitize_claims_used(draft_output.claims_used, issues)
+                    llm_mode = "openai"
+                except Exception as exc:  # noqa: BLE001
+                    llm_error = str(exc)
+                    draft_output = _build_fallback_draft(lead, audit, issues, settings)
+            else:
                 draft_output = _build_fallback_draft(lead, audit, issues, settings)
-        else:
-            draft_output = _build_fallback_draft(lead, audit, issues, settings)
 
-        draft = EmailDraft(
-            lead_id=lead.id,
-            audit_id=audit.id,
-            subject=draft_output.email_subject,
-            body_text=draft_output.email_body_text,
-        )
-        session.add(draft)
-        lead.status = "Draft Ready"
-        session.add(
-            OutreachEvent(
+            draft = EmailDraft(
                 lead_id=lead.id,
-                type="draft_generated",
-                payload={
-                    "draft_id": None,  # filled after refresh below if needed
-                    "audit_id": str(audit.id),
-                    "llm_mode": llm_mode,
-                    "llm_error": llm_error,
-                    "claims_used_count": len(draft_output.claims_used),
-                },
+                audit_id=audit.id,
+                subject=draft_output.email_subject,
+                body_text=draft_output.email_body_text,
             )
-        )
-        session.commit()
-        session.refresh(draft)
-        draft_id = str(draft.id)
-        # Add a follow-up event with the persisted draft_id to make querying simple.
-        session.add(
-            OutreachEvent(
-                lead_id=lead.id,
-                type="draft_persisted",
-                payload={"draft_id": draft_id, "audit_id": str(audit.id), "llm_mode": llm_mode},
+            session.add(draft)
+            lead.status = "Draft Ready"
+            session.add(
+                OutreachEvent(
+                    lead_id=lead.id,
+                    type="draft_generated",
+                    payload={
+                        "draft_id": None,  # filled after refresh below if needed
+                        "audit_id": str(audit.id),
+                        "llm_mode": llm_mode,
+                        "llm_error": llm_error,
+                        "claims_used_count": len(draft_output.claims_used),
+                    },
+                )
             )
-        )
-        session.commit()
+            session.commit()
+            session.refresh(draft)
+            draft_id = str(draft.id)
+            # Add a follow-up event with the persisted draft_id to make querying simple.
+            session.add(
+                OutreachEvent(
+                    lead_id=lead.id,
+                    type="draft_persisted",
+                    payload={"draft_id": draft_id, "audit_id": str(audit.id), "llm_mode": llm_mode},
+                )
+            )
+            session.commit()
 
         celery_app.send_task("sync_notion", kwargs={"lead_id": lead_id, "audit_id": audit_id, "draft_id": draft_id})
         celery_app.send_task("create_gmail_draft", kwargs={"draft_id": draft_id})
