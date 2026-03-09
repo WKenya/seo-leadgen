@@ -136,7 +136,11 @@ Notes:
 - lead-scoped worker task exceptions persist as `outreach_events.type=task_failed` with task/error context
 - suppression keys are normalized (trim + lowercase) in admin/webhook flows; matching is case-insensitive for legacy mixed-case rows
 - metrics `provider` filter is case-insensitive (`sendgrid` matches stored `SendGrid`)
+- metrics failure counting is case-insensitive for event types (legacy mixed-case `*_blocked_*` / `*_skipped_*` rows are included)
 - artifacts Basic auth scheme is case-insensitive (`basic` and `Basic` both accepted)
+- artifacts route returns `503 artifact_auth_not_configured` when only one of `ARTIFACTS_BASIC_AUTH_USER/PASS` is set
+- read route event filters are case-insensitive for both `event_type` and `provider` (legacy mixed-case rows still match)
+- `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
 - screenshot capture uses Playwright in worker; if browser/runtime missing, audit stores a screenshot error instead of failing the whole audit
