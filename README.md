@@ -136,6 +136,7 @@ Notes:
 - API emits structured JSON request logs (`event=request`, method/path/status/duration, `x-request-id`)
 - lead-scoped worker task exceptions persist as `outreach_events.type=task_failed` with task/error context
 - suppression keys are normalized (trim + lowercase) in admin/webhook flows; matching is trim+case-insensitive for legacy rows
+- admin suppression key selection skips blank legacy email/domain values before falling back to website domain/url
 - metrics/read `provider` filters are trim+case-insensitive (`sendgrid` matches stored `SendGrid` / `  SendGrid  `)
 - metrics/read event-type matching is trim+case-insensitive for legacy rows (e.g. padded/mixed-case `*_blocked_*`, `*_skipped_*`, `sent`)
 - metrics event-type buckets are normalized (trim+lowercase) so legacy variants aggregate together
