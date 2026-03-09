@@ -19,7 +19,9 @@ def normalize_link(base_url: str, href: str) -> str | None:
 
 
 def is_internal_url(site_url: str, candidate_url: str) -> bool:
-    return urlparse(site_url).netloc == urlparse(candidate_url).netloc
+    site_host = urlparse(site_url.strip()).netloc.strip().lower()
+    candidate_host = urlparse(candidate_url.strip()).netloc.strip().lower()
+    return site_host == candidate_host
 
 
 class _LinkParser(HTMLParser):

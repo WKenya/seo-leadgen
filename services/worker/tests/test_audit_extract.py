@@ -37,6 +37,12 @@ class AuditExtractTests(unittest.TestCase):
         self.assertTrue(is_internal_url("https://example.com", "https://example.com/about"))
         self.assertFalse(is_internal_url("https://example.com", "https://other.com/about"))
 
+    def test_internal_url_classification_is_case_insensitive(self) -> None:
+        self.assertTrue(is_internal_url("https://EXAMPLE.com", "https://example.com/about"))
+
+    def test_internal_url_classification_trims_whitespace(self) -> None:
+        self.assertTrue(is_internal_url("  https://example.com  ", " https://example.com/about "))
+
     def test_find_contact_signals_detects_contact_page_mailto_tel(self) -> None:
         html = """
         <html><body>
