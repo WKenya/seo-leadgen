@@ -131,6 +131,7 @@ Notes:
 - audit checks now include basic SEO hygiene on the audited homepage (title/meta/canonical/robots noindex)
 - crawl robots policy defaults to on (`CRAWL_RESPECT_ROBOTS=1`) and can be toggled if needed
 - broken-link issues are aggregated by target URL/status (repeat count in issue title) to reduce noisy duplicates
+- API emits structured JSON request logs (`event=request`, method/path/status/duration, `x-request-id`)
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
 - screenshot capture uses Playwright in worker; if browser/runtime missing, audit stores a screenshot error instead of failing the whole audit
