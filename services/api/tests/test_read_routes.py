@@ -437,6 +437,15 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(asc_body["sort"], "asc")
         self.assertEqual(asc_body["items"][0]["email_or_domain"], "bravo.example")
 
+    def test_list_suppression_ignores_blank_q(self) -> None:
+        self._seed_lead_bundle()
+
+        response = self.client.get("/suppression", params={"q": "   ", "limit": 10, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["count"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
