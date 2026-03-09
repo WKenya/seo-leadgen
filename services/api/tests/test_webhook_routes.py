@@ -252,6 +252,26 @@ class WebhookRouteTests(unittest.TestCase):
         events = self.db.execute(select(OutreachEvent)).scalars().all()
         self.assertEqual(len(events), 1)
 
+    def test_webhook_token_mode_blank_event_id_normalizes_to_none(self) -> None:
+        from app.models import OutreachEvent
+
+        lead = self._create_lead()
+        payload = {"events": [{"lead_id": str(lead.id), "event_type": "replied", "event_id": "   "}]}
+        headers = {"X-Webhook-Token": "test_shared_secret"}
+
+        first = self.client.post("/webhooks/outreach-events", headers=headers, json=payload)
+        self.assertEqual(first.status_code, 200, first.text)
+        self.assertEqual(first.json()["processed"], 1)
+
+        second = self.client.post("/webhooks/outreach-events", headers=headers, json=payload)
+        self.assertEqual(second.status_code, 200, second.text)
+        self.assertEqual(second.json()["processed"], 1)
+        self.assertEqual(second.json()["duplicates"], 0)
+
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertEqual(len(events), 2)
+        self.assertTrue(all(event.external_id is None for event in events))
+
     def test_webhook_token_mode_invalid_event_type_tracks_rejected_reason(self) -> None:
         lead = self._create_lead()
         response = self.client.post(

@@ -449,7 +449,7 @@ async def ingest_outreach_events(
             rejected.append({"reason": reason, "event_type": item.event_type})
             rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
-        external_id = item.event_id.strip() if item.event_id else None
+        external_id = (item.event_id or "").strip() or None
         if external_id:
             exists = db.execute(
                 select(OutreachEvent).where(func.trim(func.coalesce(OutreachEvent.external_id, "")) == external_id)
