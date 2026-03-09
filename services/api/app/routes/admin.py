@@ -51,10 +51,20 @@ def _lead_suppression_key(lead: Lead) -> str | None:
     if domain:
         return domain
     if lead.website_url:
-        website_domain = _normalize_suppression_value(urlparse(lead.website_url.strip()).netloc)
+        website_domain = _normalize_suppression_value(_domain_from_url(lead.website_url))
         if website_domain:
             return website_domain
     return None
+
+
+def _domain_from_url(url: str | None) -> str | None:
+    if not url:
+        return None
+    normalized = url.strip()
+    if not normalized:
+        return None
+    parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
+    return parsed.netloc or None
 
 
 def _normalize_suppression_value(value: str | None) -> str | None:
@@ -71,7 +81,7 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
         if normalized_email:
             keys.append(normalized_email)
     domain = _normalize_suppression_value(lead.website_domain) or (
-        _normalize_suppression_value(urlparse(lead.website_url.strip()).netloc) if lead.website_url else None
+        _normalize_suppression_value(_domain_from_url(lead.website_url)) if lead.website_url else None
     )
     if domain:
         keys.append(domain)

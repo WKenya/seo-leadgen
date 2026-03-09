@@ -160,6 +160,22 @@ class AdminRouteTests(unittest.TestCase):
         refreshed_lead = self.db.get(Lead, lead.id)
         self.assertEqual(refreshed_lead.status, "Suppressed")
 
+    def test_approve_draft_blocked_when_suppressed_by_schemeless_website_url_domain(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, draft = self._create_lead_with_draft(lead_email=None)
+        lead.website_domain = None
+        lead.website_url = "  Acme.Example/path  "
+        self.db.add(Suppression(email_or_domain="acme.example", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/approve-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        refreshed_lead = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed_lead.status, "Suppressed")
+
     def test_send_draft_requires_approval(self) -> None:
         _, _, draft = self._create_lead_with_draft()
         response = self.client.post(f"/admin/send-draft/{draft.id}")
@@ -328,6 +344,25 @@ class AdminRouteTests(unittest.TestCase):
         lead, _, _ = self._create_lead_with_draft(lead_email=None)
         lead.website_domain = None
         lead.website_url = "  https://acme.example/path  "
+        self.db.commit()
+
+        response = self.client.post(f"/admin/mark-optout/{lead.id}", json={"reason": "manual"})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+        self.assertEqual(suppression.email_or_domain, "acme.example")
+
+        refreshed = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed.status, "Suppressed")
+
+    def test_mark_optout_uses_schemeless_website_url_domain_fallback(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, _ = self._create_lead_with_draft(lead_email=None)
+        lead.website_domain = None
+        lead.website_url = "  Acme.Example/path  "
         self.db.commit()
 
         response = self.client.post(f"/admin/mark-optout/{lead.id}", json={"reason": "manual"})

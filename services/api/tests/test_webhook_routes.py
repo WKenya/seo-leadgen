@@ -207,6 +207,31 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["rejected_by_reason"], {})
 
+    def test_webhook_token_mode_resolves_lead_by_schemeless_website_url(self) -> None:
+        from app.models import Lead
+
+        lead = Lead(
+            id=uuid4(),
+            name="URL Match Schemeless",
+            category="HVAC",
+            source="google_places",
+            website_url="  Acme.Example/path  ",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"events": [{"email_or_domain": "acme.example", "event_type": "replied", "event_id": "evt-url-2"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["rejected_by_reason"], {})
+
     def test_webhook_duplicate_event_id_is_counted_and_not_reinserted(self) -> None:
         from app.models import OutreachEvent
 
@@ -328,6 +353,34 @@ class WebhookRouteTests(unittest.TestCase):
             "/webhooks/outreach-events",
             headers={"X-Webhook-Token": "test_shared_secret"},
             json={"events": [{"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-fallback-1"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.email_or_domain, "acme.example")
+
+    def test_webhook_token_mode_falls_back_to_schemeless_website_url_for_suppression(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = Lead(
+            id=uuid4(),
+            name="Schemeless Fallback",
+            category="HVAC",
+            source="google_places",
+            website_url="  Acme.Example/path  ",
+            website_domain=None,
+            email="   ",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"events": [{"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-fallback-2"}]},
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["processed"], 1)
