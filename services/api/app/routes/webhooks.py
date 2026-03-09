@@ -440,7 +440,9 @@ async def ingest_outreach_events(
             continue
         external_id = item.event_id.strip() if item.event_id else None
         if external_id:
-            exists = db.execute(select(OutreachEvent).where(OutreachEvent.external_id == external_id)).scalar_one_or_none()
+            exists = db.execute(
+                select(OutreachEvent).where(func.trim(func.coalesce(OutreachEvent.external_id, "")) == external_id)
+            ).scalar_one_or_none()
             if exists is not None:
                 duplicates += 1
                 continue
