@@ -18,7 +18,7 @@ UV ?= uv
 NPM ?= npm
 HAS_COMPOSE := $(shell (command -v docker >/dev/null 2>&1 || command -v podman >/dev/null 2>&1 || command -v docker-compose >/dev/null 2>&1) && echo yes || echo no)
 
-.PHONY: help doctor docs-list require-compose require-compose-engine wait-db env install install-api install-worker install-audit build up up-nobuild standup standup-nobuild down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test gate-local gate-container
+.PHONY: help doctor docs-list require-compose require-compose-engine wait-db env install install-api install-worker install-audit build up up-nobuild standup standup-nobuild down restart ps logs logs-api logs-worker logs-audit logs-db migrate migrate-local revision api-dev worker-dev scheduler-dev audit-dev smoke smoke-e2e check test gate-local gate-container gate-container-fast
 
 help:
 	@printf "%s\n" \
@@ -33,7 +33,8 @@ help:
 	"make smoke         - curl health/readiness/metrics endpoints" \
 	"make smoke-e2e     - container-backed API/data-path smoke flow" \
 	"make gate-local    - local verification gate (test + check)" \
-	"make gate-container - container verification gate (standup + smoke + smoke-e2e)" \
+	"make gate-container - container verification gate (build+standup + smoke + smoke-e2e)" \
+	"make gate-container-fast - fast container gate (no rebuild)" \
 	"make down          - stop docker stack" \
 	"make logs          - tail all container logs" \
 	"make wait-db       - wait until db accepts connections" \
@@ -206,4 +207,6 @@ test:
 
 gate-local: test check
 
-gate-container: standup-nobuild smoke smoke-e2e
+gate-container: standup smoke smoke-e2e
+
+gate-container-fast: standup-nobuild smoke smoke-e2e
