@@ -157,6 +157,7 @@ Notes:
 - read route event filters are case-insensitive for both `event_type` and `provider` (legacy mixed-case rows still match)
 - read route event payloads normalize top-level `provider` values (trim+lowercase) from legacy column/payload data
 - read route event metadata fields (`external_id`, `provider_event_*`) are trimmed; blank legacy values normalize to `null`
+- suppression read payloads normalize legacy `email_or_domain`/`reason` whitespace+case
 - `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
