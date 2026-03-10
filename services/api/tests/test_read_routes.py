@@ -587,6 +587,20 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["total"], 2)
         self.assertEqual(body["count"], 2)
 
+    def test_list_suppression_excludes_blank_legacy_rows(self) -> None:
+        from app.models import Suppression
+
+        self._seed_lead_bundle()
+        self.db.add(Suppression(email_or_domain="   ", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.get("/suppression", params={"limit": 10, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["total"], 2)
+        self.assertEqual(body["count"], 2)
+        self.assertEqual({item["email_or_domain"] for item in body["items"]}, {"owner@acme.example", "bravo.example"})
+
     def test_list_suppression_normalizes_legacy_whitespace_rows(self) -> None:
         from app.models import Suppression
 

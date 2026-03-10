@@ -18,9 +18,10 @@ def list_suppression(
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     q_filter = (q or "").strip() or None
-    base = select(Suppression)
+    normalized_value = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
+    base = select(Suppression).where(normalized_value != "")
     if q_filter:
-        base = base.where(Suppression.email_or_domain.ilike(f"%{q_filter}%"))
+        base = base.where(normalized_value.like(f"%{q_filter.lower()}%"))
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
     order_column = Suppression.created_at.asc() if sort == "asc" else Suppression.created_at.desc()
     stmt = base.order_by(order_column).offset(offset).limit(limit)
