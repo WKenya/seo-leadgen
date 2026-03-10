@@ -159,6 +159,7 @@ Notes:
 - read route event metadata fields (`external_id`, `provider_event_*`) are trimmed; blank legacy values normalize to `null`
 - suppression read payloads normalize legacy `email_or_domain`/`reason` whitespace+case
 - `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
+- lead read payload `status` values normalize to canonical labels for known states (e.g. legacy `  sUpPrEsSeD  ` -> `Suppressed`)
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
 - screenshot capture uses Playwright in worker; if browser/runtime missing, audit stores a screenshot error instead of failing the whole audit
