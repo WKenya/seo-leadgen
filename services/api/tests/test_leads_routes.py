@@ -160,6 +160,7 @@ class LeadRouteTests(unittest.TestCase):
         self.assertEqual(body["total"], 1)
         self.assertEqual(body["count"], 1)
         self.assertEqual(body["items"][0]["name"], "Gamma HVAC")
+        self.assertEqual(body["items"][0]["status"], "Suppressed")
 
     def test_list_leads_status_filter_matches_whitespace_padded_stored_status(self) -> None:
         now = datetime.now(timezone.utc)
@@ -172,6 +173,7 @@ class LeadRouteTests(unittest.TestCase):
         self.assertEqual(body["total"], 1)
         self.assertEqual(body["count"], 1)
         self.assertEqual(body["items"][0]["name"], "Gamma HVAC")
+        self.assertEqual(body["items"][0]["status"], "Suppressed")
 
     def test_get_lead_returns_404_when_missing(self) -> None:
         response = self.client.get(f"/leads/{uuid4()}")

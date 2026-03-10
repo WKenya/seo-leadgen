@@ -4,6 +4,17 @@ from uuid import UUID
 from pydantic import BaseModel
 
 
+_LEAD_STATUS_LABELS = {
+    "discovered": "Discovered",
+    "audited": "Audited",
+    "draft ready": "Draft Ready",
+    "approved to send": "Approved to Send",
+    "sent": "Sent",
+    "replied": "Replied",
+    "suppressed": "Suppressed",
+}
+
+
 def _normalize_optional_text(value: object | None, *, lower: bool = False) -> str | None:
     if value is None:
         return None
@@ -13,6 +24,13 @@ def _normalize_optional_text(value: object | None, *, lower: bool = False) -> st
     if lower:
         return text.lower()
     return text
+
+
+def _normalize_lead_status(value: object | None) -> str:
+    normalized = _normalize_optional_text(value)
+    if not normalized:
+        return ""
+    return _LEAD_STATUS_LABELS.get(normalized.lower(), normalized)
 
 
 class LeadRead(BaseModel):
@@ -32,7 +50,9 @@ class LeadRead(BaseModel):
 
     @classmethod
     def from_model(cls, lead: object) -> "LeadRead":
-        return cls.model_validate(lead, from_attributes=True)
+        parsed = cls.model_validate(lead, from_attributes=True)
+        parsed.status = _normalize_lead_status(getattr(lead, "status", parsed.status))
+        return parsed
 
 
 class AuditRead(BaseModel):
