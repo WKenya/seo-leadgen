@@ -120,6 +120,7 @@ class OutreachEventRead(BaseModel):
     def from_model(cls, event: object) -> "OutreachEventRead":
         payload = getattr(event, "payload", None)
         payload_map = payload if isinstance(payload, dict) else {}
+        normalized_type = _normalize_optional_text(getattr(event, "type", None), lower=True) or ""
         normalized_provider = _normalize_optional_text(getattr(event, "provider", None), lower=True) or _normalize_optional_text(
             payload_map.get("provider"),
             lower=True,
@@ -128,7 +129,7 @@ class OutreachEventRead(BaseModel):
             id=getattr(event, "id"),
             lead_id=getattr(event, "lead_id"),
             external_id=_normalize_optional_text(getattr(event, "external_id", None)),
-            type=getattr(event, "type"),
+            type=normalized_type,
             payload=payload,
             provider=normalized_provider,
             provider_event_id=_normalize_optional_text(payload_map.get("provider_event_id")),

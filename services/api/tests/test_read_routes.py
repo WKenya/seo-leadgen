@@ -474,12 +474,16 @@ class ReadRouteTests(unittest.TestCase):
         response = self.client.get("/events", params={"event_type": "sent", "limit": 20, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         items = response.json()["items"]
-        self.assertTrue(any(item["id"] == str(legacy_event.id) for item in items))
+        matching = [item for item in items if item["id"] == str(legacy_event.id)]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["type"], "sent")
 
         lead_response = self.client.get(f"/leads/{lead1.id}/events", params={"event_type": "sent", "limit": 20, "offset": 0})
         self.assertEqual(lead_response.status_code, 200, lead_response.text)
         lead_items = lead_response.json()["items"]
-        self.assertTrue(any(item["id"] == str(legacy_event.id) for item in lead_items))
+        lead_matching = [item for item in lead_items if item["id"] == str(legacy_event.id)]
+        self.assertEqual(len(lead_matching), 1)
+        self.assertEqual(lead_matching[0]["type"], "sent")
 
     def test_list_events_event_type_filter_matches_whitespace_padded_stored_type(self) -> None:
         from app.models import OutreachEvent
@@ -500,7 +504,9 @@ class ReadRouteTests(unittest.TestCase):
         response = self.client.get("/events", params={"event_type": "sent", "limit": 20, "offset": 0})
         self.assertEqual(response.status_code, 200, response.text)
         items = response.json()["items"]
-        self.assertTrue(any(item["id"] == str(legacy_event.id) for item in items))
+        matching = [item for item in items if item["id"] == str(legacy_event.id)]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["type"], "sent")
 
     def test_list_events_and_lead_events_support_offset(self) -> None:
         seeded = self._seed_lead_bundle()
