@@ -126,4 +126,15 @@ class SuppressionRead(BaseModel):
 
     @classmethod
     def from_model(cls, suppression: object) -> "SuppressionRead":
-        return cls.model_validate(suppression, from_attributes=True)
+        raw_email_or_domain = getattr(suppression, "email_or_domain", "")
+        raw_reason = getattr(suppression, "reason", "")
+        normalized_email_or_domain = _normalize_optional_text(raw_email_or_domain, lower=True) or str(
+            raw_email_or_domain
+        ).strip().lower()
+        normalized_reason = _normalize_optional_text(raw_reason, lower=True) or str(raw_reason).strip().lower()
+        return cls(
+            id=getattr(suppression, "id"),
+            email_or_domain=normalized_email_or_domain,
+            reason=normalized_reason,
+            created_at=getattr(suppression, "created_at", None),
+        )

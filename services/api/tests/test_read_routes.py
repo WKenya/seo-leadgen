@@ -581,6 +581,20 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["total"], 2)
         self.assertEqual(body["count"], 2)
 
+    def test_list_suppression_normalizes_legacy_whitespace_rows(self) -> None:
+        from app.models import Suppression
+
+        self._seed_lead_bundle()
+        self.db.add(Suppression(email_or_domain="  LeGaCy.ExAmPlE  ", reason="  OpT_OuT  "))
+        self.db.commit()
+
+        response = self.client.get("/suppression", params={"q": "legacy", "limit": 10, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["items"][0]["email_or_domain"], "legacy.example")
+        self.assertEqual(body["items"][0]["reason"], "opt_out")
+
 
 if __name__ == "__main__":
     unittest.main()
