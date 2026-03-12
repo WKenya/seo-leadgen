@@ -74,6 +74,11 @@ def _normalize_suppression_value(value: str | None) -> str | None:
     return normalized or None
 
 
+def _normalize_suppression_reason(reason: str | None, *, default: str = "manual") -> str:
+    normalized = (reason or "").strip().lower()
+    return normalized or default
+
+
 def _is_suppressed(db: Session, lead: Lead) -> bool:
     keys: list[str] = []
     if lead.email:
@@ -107,13 +112,14 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
     normalized_value = _normalize_suppression_value(value)
     if not normalized_value:
         return
+    normalized_reason = _normalize_suppression_reason(reason)
     suppression = db.execute(
         select(Suppression).where(
             func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))) == normalized_value
         )
     ).scalar_one_or_none()
     if suppression is None:
-        db.add(Suppression(email_or_domain=normalized_value, reason=reason))
+        db.add(Suppression(email_or_domain=normalized_value, reason=normalized_reason))
 
 
 @router.post("/run-discovery")
@@ -344,8 +350,9 @@ def mark_optout(
     if not value:
         return {"lead_id": str(lead_id), "status": "missing_suppression_target"}
 
-    _upsert_suppression(db, value=value, reason=payload.reason)
+    reason = _normalize_suppression_reason(payload.reason)
+    _upsert_suppression(db, value=value, reason=reason)
     lead.status = "Suppressed"
-    db.add(OutreachEvent(lead_id=lead.id, type="opt_out", payload={"reason": payload.reason, "value": value}))
+    db.add(OutreachEvent(lead_id=lead.id, type="opt_out", payload={"reason": reason, "value": value}))
     db.commit()
     return {"lead_id": str(lead_id), "status": "suppressed"}

@@ -338,6 +338,25 @@ class AdminRouteTests(unittest.TestCase):
         self.assertIsNotNone(suppression)
         self.assertEqual(suppression.email_or_domain, "owner@acme.example")
 
+    def test_mark_optout_normalizes_reason(self) -> None:
+        from app.models import OutreachEvent, Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        response = self.client.post(
+            f"/admin/mark-optout/{lead.id}",
+            json={"reason": "  MANUAL  "},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+        self.assertEqual(suppression.reason, "manual")
+
+        events = self.db.execute(select(OutreachEvent).where(OutreachEvent.type == "opt_out")).scalars().all()
+        self.assertEqual(len(events), 1)
+        self.assertEqual((events[0].payload or {}).get("reason"), "manual")
+
     def test_mark_optout_uses_whitespace_padded_website_url_domain_fallback(self) -> None:
         from app.models import Lead, Suppression
 

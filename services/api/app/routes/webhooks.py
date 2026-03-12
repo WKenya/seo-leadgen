@@ -161,6 +161,11 @@ def _normalize_email_or_domain(value: str | None) -> str | None:
     return normalized or None
 
 
+def _normalize_suppression_reason(reason: str | None, *, default: str = "manual") -> str:
+    normalized = (reason or "").strip().lower()
+    return normalized or default
+
+
 def _first_normalized_email_or_domain(*values: str | None) -> str | None:
     for value in values:
         normalized = _normalize_email_or_domain(value)
@@ -193,13 +198,14 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
     normalized_value = _normalize_email_or_domain(value)
     if not normalized_value:
         return
+    normalized_reason = _normalize_suppression_reason(reason)
     row = db.execute(
         select(Suppression).where(
             func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))) == normalized_value
         )
     ).scalar_one_or_none()
     if row is None:
-        db.add(Suppression(email_or_domain=normalized_value, reason=reason))
+        db.add(Suppression(email_or_domain=normalized_value, reason=normalized_reason))
 
 
 def _map_sendgrid_event_type(value: object) -> str | None:
