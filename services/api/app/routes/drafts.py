@@ -19,13 +19,14 @@ def _apply_event_filters(
 ):
     stmt = base_stmt
     normalized_event_type = func.lower(func.trim(func.coalesce(OutreachEvent.type, "")))
+    provider_source = func.coalesce(
+        func.nullif(func.trim(func.coalesce(OutreachEvent.provider, "")), ""),
+        OutreachEvent.payload["provider"].as_string(),
+        "",
+    )
     normalized_provider = func.lower(
         func.trim(
-            func.coalesce(
-                OutreachEvent.provider,
-                OutreachEvent.payload["provider"].as_string(),
-                "",
-            )
+            provider_source
         )
     )
     stmt = stmt.where(normalized_event_type != "")
