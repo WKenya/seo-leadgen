@@ -158,6 +158,7 @@ Notes:
 - discover lead matching trims stored `place_id` values for legacy whitespace rows
 - summarize suppression check now considers `lead.website_domain` when `website_url` is missing
 - crawler internal-link host classification is trim+case-insensitive and handles schemeless URLs (`example.com/path`); missing-host candidates are not treated as internal
+- crawler internal-link host classification compares hostname (not `netloc`), so default-port links like `https://example.com:443/...` still count as internal
 - read route event filters are case-insensitive for both `event_type` and `provider` (legacy mixed-case rows still match)
 - read route event `type` values are normalized (trim+lowercase) for legacy mixed-case/whitespace rows
 - read route event list APIs (`/events`, `/leads/{id}/events`) exclude blank legacy event types from results/counts
