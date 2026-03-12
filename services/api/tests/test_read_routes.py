@@ -455,6 +455,36 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["total"], 3)
         self.assertEqual(body["count"], 3)
 
+    def test_list_events_excludes_blank_legacy_event_types(self) -> None:
+        from app.models import OutreachEvent
+
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+        legacy_blank = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="   ",
+            provider="mailgun",
+            payload={"provider": "mailgun", "provider_event_id": "mg-blank-evt-1"},
+            created_at=datetime.now(timezone.utc),
+        )
+        self.db.add(legacy_blank)
+        self.db.commit()
+
+        response = self.client.get("/events", params={"limit": 20, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["total"], 3)
+        self.assertEqual(body["count"], 3)
+        self.assertTrue(all(item["id"] != str(legacy_blank.id) for item in body["items"]))
+
+        lead_response = self.client.get(f"/leads/{lead1.id}/events", params={"limit": 20, "offset": 0})
+        self.assertEqual(lead_response.status_code, 200, lead_response.text)
+        lead_body = lead_response.json()
+        self.assertEqual(lead_body["total"], 2)
+        self.assertEqual(lead_body["count"], 2)
+        self.assertTrue(all(item["id"] != str(legacy_blank.id) for item in lead_body["items"]))
+
     def test_list_events_event_type_filter_matches_mixed_case_stored_type(self) -> None:
         from app.models import OutreachEvent
 
