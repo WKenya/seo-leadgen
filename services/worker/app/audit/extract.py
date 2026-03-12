@@ -21,8 +21,8 @@ def normalize_link(base_url: str, href: str) -> str | None:
 def is_internal_url(site_url: str, candidate_url: str) -> bool:
     site = site_url.strip()
     candidate = candidate_url.strip()
-    site_host = urlparse(site if "://" in site else f"https://{site}").netloc.strip().lower()
-    candidate_host = urlparse(candidate if "://" in candidate else f"https://{candidate}").netloc.strip().lower()
+    site_host = (urlparse(site if "://" in site else f"https://{site}").hostname or "").strip().lower()
+    candidate_host = (urlparse(candidate if "://" in candidate else f"https://{candidate}").hostname or "").strip().lower()
     if not site_host or not candidate_host:
         return False
     return site_host == candidate_host
