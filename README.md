@@ -149,6 +149,7 @@ Notes:
 - webhook lead lookup trims stored `leads.email` / `leads.website_domain` for legacy whitespace rows
 - admin/webhook/discover/summarize domain fallback parsing trims `website_url` first, so whitespace-padded legacy URLs still match
 - admin/webhook/discover/summarize domain fallback parsing also handles schemeless `website_url` values (`example.com/path`)
+- admin/webhook/discover/summarize domain fallback parsing uses URL hostname (drops port/userinfo) so `https://example.com:443/path` maps to `example.com`
 - webhook duplicate-event detection trims stored `outreach_events.external_id` for legacy whitespace rows
 - webhook events with blank `event_id` now store `external_id=NULL` (avoid empty-string uniqueness collisions)
 - webhook ingest trims `provider_event_name`/`provider_event_at`; blank values store as `null`
