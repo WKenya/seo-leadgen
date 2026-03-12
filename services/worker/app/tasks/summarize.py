@@ -22,7 +22,7 @@ def _lead_domain(website_url: str | None) -> str | None:
     if not normalized_url:
         return None
     parsed = urlparse(normalized_url if "://" in normalized_url else f"https://{normalized_url}")
-    return parsed.netloc.strip().lower() or None
+    return (parsed.hostname or "").strip().lower() or None
 
 
 def _is_suppressed(session, lead: Lead) -> bool:

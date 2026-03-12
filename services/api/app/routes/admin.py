@@ -64,7 +64,7 @@ def _domain_from_url(url: str | None) -> str | None:
     if not normalized:
         return None
     parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
-    return parsed.netloc or None
+    return parsed.hostname or None
 
 
 def _normalize_suppression_value(value: str | None) -> str | None:
