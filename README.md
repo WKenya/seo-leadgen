@@ -139,6 +139,7 @@ Notes:
 - admin/webhook suppression reasons are normalized (trim+lowercase; blank defaults to `manual`)
 - admin/webhook suppression key selection skips blank legacy email/domain values before falling back to website domain/url
 - metrics/read `provider` filters are trim+case-insensitive (`sendgrid` matches stored `SendGrid` / `  SendGrid  `)
+- metrics provider filters/buckets/latest-provider lists also fall back to normalized `payload.provider` when legacy rows have null `outreach_events.provider`
 - metrics/read event-type matching is trim+case-insensitive for legacy rows (e.g. padded/mixed-case `*_blocked_*`, `*_skipped_*`, `sent`)
 - metrics event-type buckets are normalized (trim+lowercase) so legacy variants aggregate together
 - metrics event-type buckets/latest lists ignore blank event types from legacy rows
