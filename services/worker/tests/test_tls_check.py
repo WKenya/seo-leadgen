@@ -22,12 +22,27 @@ class TlsCheckTests(unittest.TestCase):
     def test_with_scheme_preserves_query(self) -> None:
         self.assertEqual(_with_scheme(" example.com/path?q=1 ", "https"), "https://example.com/path?q=1")
 
+    def test_with_scheme_drops_default_port_when_switching_schemes(self) -> None:
+        self.assertEqual(_with_scheme("http://example.com:80/path", "https"), "https://example.com/path")
+        self.assertEqual(_with_scheme("https://example.com:443/path", "http"), "http://example.com/path")
+
+    def test_with_scheme_keeps_non_default_port_when_switching_schemes(self) -> None:
+        self.assertEqual(_with_scheme("http://example.com:8080/path", "https"), "https://example.com:8080/path")
+
     def test_check_tls_fallback_final_url_uses_normalized_https_url(self) -> None:
         with patch("app.audit.tls_check._fetch_chain", return_value=([], None, "other")):
             result = check_tls("  example.com  ")
 
         self.assertEqual(result["final_url"], "https://example.com/")
         self.assertEqual(result["url"], "  example.com  ")
+
+    def test_check_tls_uses_default_ports_after_scheme_swap(self) -> None:
+        with patch("app.audit.tls_check._fetch_chain", return_value=([], None, "other")) as fetch_mock:
+            check_tls("http://example.com:80/path")
+
+        called_urls = [call.args[0] for call in fetch_mock.call_args_list]
+        self.assertEqual(called_urls[0], "http://example.com/path")
+        self.assertEqual(called_urls[1], "https://example.com/path")
 
     def test_check_tls_prefers_https_final_url_when_present(self) -> None:
         with patch(

@@ -5,10 +5,33 @@ from urllib.parse import urlparse, urlunparse
 import httpx
 
 
+def _is_default_port_for_scheme(scheme: str, port: int) -> bool:
+    return (scheme == "https" and port == 443) or (scheme == "http" and port == 80)
+
+
 def _with_scheme(url: str, scheme: str) -> str:
     normalized_url = (url or "").strip()
     parsed = urlparse(normalized_url if "://" in normalized_url else f"https://{normalized_url}")
-    return urlunparse((scheme, parsed.netloc.strip(), (parsed.path or "/").strip() or "/", "", parsed.query, ""))
+    source_scheme = parsed.scheme.lower() or "https"
+    hostname = (parsed.hostname or "").strip().lower()
+    if not hostname:
+        return urlunparse((scheme, "", (parsed.path or "/").strip() or "/", "", parsed.query, ""))
+
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    port_value: int | None
+    try:
+        port_value = parsed.port
+    except ValueError:
+        port_value = None
+
+    if port_value is None:
+        netloc = host
+    elif _is_default_port_for_scheme(source_scheme, port_value) or _is_default_port_for_scheme(scheme, port_value):
+        netloc = host
+    else:
+        netloc = f"{host}:{port_value}"
+
+    return urlunparse((scheme, netloc, (parsed.path or "/").strip() or "/", "", parsed.query, ""))
 
 
 def _classify_cert_error(exc: Exception) -> str:
