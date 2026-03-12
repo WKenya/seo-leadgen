@@ -152,7 +152,7 @@ class SuppressionRead(BaseModel):
         normalized_email_or_domain = _normalize_optional_text(raw_email_or_domain, lower=True) or str(
             raw_email_or_domain
         ).strip().lower()
-        normalized_reason = _normalize_optional_text(raw_reason, lower=True) or str(raw_reason).strip().lower()
+        normalized_reason = _normalize_optional_text(raw_reason, lower=True) or "manual"
         return cls(
             id=getattr(suppression, "id"),
             email_or_domain=normalized_email_or_domain,
