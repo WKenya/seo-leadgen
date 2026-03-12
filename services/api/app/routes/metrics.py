@@ -23,7 +23,15 @@ _STATUS_LABELS = {
 
 
 def _provider_expr():
-    return func.lower(func.trim(func.coalesce(OutreachEvent.provider, "")))
+    return func.lower(
+        func.trim(
+            func.coalesce(
+                OutreachEvent.provider,
+                OutreachEvent.payload["provider"].as_string(),
+                "",
+            )
+        )
+    )
 
 
 def _event_type_expr():
