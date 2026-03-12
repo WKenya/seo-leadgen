@@ -161,6 +161,13 @@ def _normalize_email_or_domain(value: str | None) -> str | None:
     return normalized or None
 
 
+def _normalize_optional_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 def _normalize_suppression_reason(reason: str | None, *, default: str = "manual") -> str:
     normalized = (reason or "").strip().lower()
     return normalized or default
@@ -481,6 +488,8 @@ async def ingest_outreach_events(
             continue
 
         provider_value = (item.provider or "").strip().lower() or None
+        provider_event_name = _normalize_optional_text(item.provider_event_name)
+        provider_event_at = _normalize_optional_text(item.provider_event_at)
         suppression_value = _first_normalized_email_or_domain(
             item.email_or_domain,
             lead.email,
@@ -503,8 +512,8 @@ async def ingest_outreach_events(
                     "source": "webhook",
                     "provider": provider_value,
                     "provider_event_id": external_id if provider_value else None,
-                    "provider_event_name": item.provider_event_name,
-                    "provider_event_at": item.provider_event_at,
+                    "provider_event_name": provider_event_name,
+                    "provider_event_at": provider_event_at,
                     "email_or_domain": suppression_value or None,
                     "payload": item.payload,
                 },

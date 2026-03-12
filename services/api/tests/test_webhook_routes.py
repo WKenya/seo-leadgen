@@ -157,6 +157,35 @@ class WebhookRouteTests(unittest.TestCase):
         payload = event.payload or {}
         self.assertEqual(payload.get("provider"), "sendgrid")
 
+    def test_webhook_token_mode_trims_provider_event_metadata_fields(self) -> None:
+        from app.models import OutreachEvent
+
+        lead = self._create_lead()
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "events": [
+                    {
+                        "lead_id": str(lead.id),
+                        "event_type": "replied",
+                        "event_id": "evt-provider-meta-1",
+                        "provider": "sendgrid",
+                        "provider_event_name": "  Delivered  ",
+                        "provider_event_at": "   ",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        event = self.db.execute(select(OutreachEvent)).scalar_one_or_none()
+        self.assertIsNotNone(event)
+        payload = event.payload or {}
+        self.assertEqual(payload.get("provider_event_name"), "Delivered")
+        self.assertIsNone(payload.get("provider_event_at"))
+
     def test_webhook_token_mode_resolves_lead_by_website_domain(self) -> None:
         from app.models import Lead
 
