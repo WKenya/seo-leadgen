@@ -32,7 +32,16 @@ def normalize_website_url(url: str | None) -> str | None:
     if not parsed.netloc:
         return None
     scheme = parsed.scheme.lower() or "https"
-    netloc = parsed.netloc.lower()
+    hostname = (parsed.hostname or "").lower()
+    if not hostname:
+        return None
+    host = f"[{hostname}]" if ":" in hostname else hostname
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    is_default_port = (scheme == "https" and port == 443) or (scheme == "http" and port == 80)
+    netloc = host if (port is None or is_default_port) else f"{host}:{port}"
     query_items = []
     for key, val in parse_qsl(parsed.query, keep_blank_values=False):
         if key.lower().startswith("utm_"):

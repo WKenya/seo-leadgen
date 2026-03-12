@@ -20,6 +20,13 @@ class GooglePlacesTests(unittest.TestCase):
         url = "HTTP://WWW.Example.com/contact/?mc_eid=1"
         self.assertEqual(normalize_website_url(url), "http://www.example.com/contact/")
 
+    def test_normalize_website_url_drops_default_ports(self) -> None:
+        self.assertEqual(normalize_website_url("https://Example.com:443/path"), "https://example.com/path")
+        self.assertEqual(normalize_website_url("http://Example.com:80/path"), "http://example.com/path")
+
+    def test_normalize_website_url_keeps_non_default_port(self) -> None:
+        self.assertEqual(normalize_website_url("https://Example.com:8443/path"), "https://example.com:8443/path")
+
     def test_normalize_website_url_handles_empty(self) -> None:
         self.assertIsNone(normalize_website_url(""))
         self.assertIsNone(normalize_website_url(None))
