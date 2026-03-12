@@ -27,6 +27,11 @@ class ScreenshotTests(unittest.TestCase):
         rel = build_screenshot_relpath("  example.com/path  ", now=now)
         self.assertEqual(rel, "screenshots/example.com/20260224T000000Z.png")
 
+    def test_build_screenshot_relpath_uses_hostname_for_default_port_url(self) -> None:
+        now = datetime(2026, 2, 24, tzinfo=timezone.utc)
+        rel = build_screenshot_relpath("https://example.com:443/path", now=now)
+        self.assertEqual(rel, "screenshots/example.com/20260224T000000Z.png")
+
 
 if __name__ == "__main__":
     unittest.main()
