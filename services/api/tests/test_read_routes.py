@@ -378,6 +378,36 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(len(matching), 1)
         self.assertEqual(matching[0]["provider"], "sendgrid")
 
+    def test_list_events_provider_filter_falls_back_to_payload_provider_when_column_missing(self) -> None:
+        from app.models import OutreachEvent
+
+        seeded = self._seed_lead_bundle()
+        lead1 = seeded["lead1"]
+        legacy_event = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead1.id,
+            type="manual",
+            provider=None,
+            payload={"provider": "  SeNdGrId  ", "provider_event_id": "sg-payload-filter-1"},
+            created_at=datetime.now(timezone.utc),
+        )
+        self.db.add(legacy_event)
+        self.db.commit()
+
+        response = self.client.get("/events", params={"provider": "sendgrid", "limit": 20, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        items = response.json()["items"]
+        matching = [item for item in items if item["id"] == str(legacy_event.id)]
+        self.assertEqual(len(matching), 1)
+        self.assertEqual(matching[0]["provider"], "sendgrid")
+
+        lead_response = self.client.get(f"/leads/{lead1.id}/events", params={"provider": "sendgrid", "limit": 20, "offset": 0})
+        self.assertEqual(lead_response.status_code, 200, lead_response.text)
+        lead_items = lead_response.json()["items"]
+        lead_matching = [item for item in lead_items if item["id"] == str(legacy_event.id)]
+        self.assertEqual(len(lead_matching), 1)
+        self.assertEqual(lead_matching[0]["provider"], "sendgrid")
+
     def test_list_events_trims_external_and_provider_event_fields(self) -> None:
         from app.models import OutreachEvent
 
