@@ -47,7 +47,7 @@ def _lead_suppression_key(lead: Lead) -> str | None:
     email = _normalize_suppression_value(lead.email)
     if email:
         return email
-    domain = _normalize_suppression_value(lead.website_domain)
+    domain = _normalize_suppression_value(_domain_from_url(lead.website_domain) if lead.website_domain else None)
     if domain:
         return domain
     if lead.website_url:
@@ -85,7 +85,7 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
         normalized_email = _normalize_suppression_value(lead.email)
         if normalized_email:
             keys.append(normalized_email)
-    domain = _normalize_suppression_value(lead.website_domain) or (
+    domain = _normalize_suppression_value(_domain_from_url(lead.website_domain) if lead.website_domain else None) or (
         _normalize_suppression_value(_domain_from_url(lead.website_url)) if lead.website_url else None
     )
     if domain:

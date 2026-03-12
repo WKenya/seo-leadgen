@@ -195,8 +195,9 @@ def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
     ).scalar_one_or_none()
     if lead is not None:
         return lead
-    for candidate in db.execute(select(Lead).where(Lead.website_domain.is_(None), Lead.website_url.is_not(None))).scalars():
-        if _domain_from_url(candidate.website_url) == normalized:
+    for candidate in db.execute(select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))).scalars():
+        candidate_domain = _domain_from_url(candidate.website_domain) or _domain_from_url(candidate.website_url)
+        if candidate_domain == normalized:
             return candidate
     return None
 

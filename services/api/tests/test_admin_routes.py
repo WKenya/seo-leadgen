@@ -192,6 +192,22 @@ class AdminRouteTests(unittest.TestCase):
         refreshed_lead = self.db.get(Lead, lead.id)
         self.assertEqual(refreshed_lead.status, "Suppressed")
 
+    def test_approve_draft_blocked_when_suppressed_by_website_domain_with_port(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, draft = self._create_lead_with_draft(lead_email=None)
+        lead.website_domain = "Acme.Example:443"
+        lead.website_url = "https://different.example/path"
+        self.db.add(Suppression(email_or_domain="acme.example", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/approve-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        refreshed_lead = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed_lead.status, "Suppressed")
+
     def test_send_draft_requires_approval(self) -> None:
         _, _, draft = self._create_lead_with_draft()
         response = self.client.post(f"/admin/send-draft/{draft.id}")

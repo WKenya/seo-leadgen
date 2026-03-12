@@ -155,6 +155,22 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.assertIsNotNone(found)
         self.assertEqual(found.id, lead.id)
 
+    def test_find_existing_lead_matches_legacy_domain_with_port(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Legacy Domain Port",
+            source="google_places",
+            website_url="https://legacy.example",
+            website_domain="LeGaCy.ExAmPlE:443",
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        found = _find_existing_lead(self.session, place_id="new-place", website_url="https://legacy.example/contact")
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, lead.id)
+
     def test_suppression_values_normalizes_legacy_whitespace_and_case(self) -> None:
         self.session.add(Suppression(email_or_domain="  Acme.Example  ", reason="opt_out"))
         self.session.commit()

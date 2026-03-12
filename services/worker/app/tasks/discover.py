@@ -40,8 +40,9 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
     if lead is not None:
         return lead
 
-    for candidate in session.execute(select(Lead).where(Lead.website_domain.is_(None), Lead.website_url.is_not(None))).scalars():
-        if _domain(candidate.website_url) == target_domain:
+    for candidate in session.execute(select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))).scalars():
+        candidate_domain = _domain(candidate.website_domain) or _domain(candidate.website_url)
+        if candidate_domain == target_domain:
             return candidate
     return None
 
