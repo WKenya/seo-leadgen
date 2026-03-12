@@ -140,7 +140,7 @@ Notes:
 - admin/webhook suppression reasons are normalized (trim+lowercase; blank defaults to `manual`)
 - admin/webhook suppression key selection skips blank legacy email/domain values before falling back to website domain/url
 - metrics/read `provider` filters are trim+case-insensitive (`sendgrid` matches stored `SendGrid` / `  SendGrid  `)
-- metrics provider filters/buckets/latest-provider lists also fall back to normalized `payload.provider` when legacy rows have null `outreach_events.provider`
+- metrics provider filters/buckets/latest-provider lists also fall back to normalized `payload.provider` when legacy rows have null/blank `outreach_events.provider`
 - metrics/read event-type matching is trim+case-insensitive for legacy rows (e.g. padded/mixed-case `*_blocked_*`, `*_skipped_*`, `sent`)
 - metrics event-type buckets are normalized (trim+lowercase) so legacy variants aggregate together
 - metrics event-type buckets/latest lists ignore blank event types from legacy rows
@@ -166,7 +166,7 @@ Notes:
 - read route event `type` values are normalized (trim+lowercase) for legacy mixed-case/whitespace rows
 - read route event list APIs (`/events`, `/leads/{id}/events`) exclude blank legacy event types from results/counts
 - lead pipeline recent events (`/leads/{id}/pipeline`) also exclude blank legacy event types
-- read route `provider` filters also fall back to normalized `payload.provider` when legacy rows have null `outreach_events.provider`
+- read route `provider` filters also fall back to normalized `payload.provider` when legacy rows have null/blank `outreach_events.provider`
 - read route event payloads normalize top-level `provider` values (trim+lowercase) from legacy column/payload data
 - read route event metadata fields (`external_id`, `provider_event_*`) are trimmed; blank legacy values normalize to `null`
 - suppression read payloads normalize legacy `email_or_domain`/`reason` whitespace+case; blank `reason` defaults to `manual`
