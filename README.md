@@ -157,6 +157,7 @@ Notes:
 - discover task domain/suppression matching trims and lowercases legacy stored values
 - discover suppression matching ignores blank suppression rows (prevents false suppression on no-domain leads)
 - discover lead matching trims stored `place_id` values for legacy whitespace rows
+- discovery website URL normalization now canonicalizes default ports (`:443`/`:80` removed) while preserving non-default ports
 - summarize suppression check now considers `lead.website_domain` when `website_url` is missing
 - crawler internal-link host classification is trim+case-insensitive and handles schemeless URLs (`example.com/path`); missing-host candidates are not treated as internal
 - crawler internal-link host classification compares hostname (not `netloc`), so default-port links like `https://example.com:443/...` still count as internal
