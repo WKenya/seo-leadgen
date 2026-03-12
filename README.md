@@ -172,6 +172,7 @@ Notes:
 - suppression read payloads normalize legacy `email_or_domain`/`reason` whitespace+case; blank `reason` defaults to `manual`
 - suppression list/read APIs ignore blank legacy suppression rows
 - `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
+- `/leads` `q` filter matches `name`, `website_url`, and `website_domain` (supports legacy domain-only rows)
 - lead read payload `status` values normalize to canonical labels for known states (e.g. legacy `  sUpPrEsSeD  ` -> `Suppressed`)
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
