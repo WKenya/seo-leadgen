@@ -101,8 +101,14 @@ def get_lead_pipeline(lead_id: UUID, db: Session = Depends(get_db)) -> dict[str,
         .scalars()
         .first()
     )
+    normalized_event_type = func.lower(func.trim(func.coalesce(OutreachEvent.type, "")))
     recent_events = (
-        db.execute(select(OutreachEvent).where(OutreachEvent.lead_id == lead_id).order_by(OutreachEvent.created_at.desc()).limit(10))
+        db.execute(
+            select(OutreachEvent)
+            .where(OutreachEvent.lead_id == lead_id, normalized_event_type != "")
+            .order_by(OutreachEvent.created_at.desc())
+            .limit(10)
+        )
         .scalars()
         .all()
     )

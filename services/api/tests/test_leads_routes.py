@@ -286,6 +286,50 @@ class LeadRouteTests(unittest.TestCase):
         self.assertEqual(body["latest_draft"]["subject"], "new")
         self.assertEqual([event["type"] for event in body["recent_events"][:2]], ["sent", "approved"])
 
+    def test_pipeline_excludes_blank_legacy_event_types(self) -> None:
+        from app.models import Audit, EmailDraft, OutreachEvent
+
+        lead = self._create_lead(name="Acme", website_url="https://acme.example", status="Draft Ready")
+        now = datetime.now(timezone.utc)
+
+        audit = Audit(
+            id=uuid4(),
+            lead_id=lead.id,
+            final_url="https://acme.example/final",
+            started_at=now - timedelta(hours=1),
+            finished_at=now - timedelta(minutes=30),
+        )
+        draft = EmailDraft(
+            id=uuid4(),
+            lead_id=lead.id,
+            audit_id=audit.id,
+            subject="new",
+            body_text="new body",
+            created_at=now,
+        )
+        blank_event = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead.id,
+            type="   ",
+            payload={"step": "blank"},
+            created_at=now,
+        )
+        sent_event = OutreachEvent(
+            id=uuid4(),
+            lead_id=lead.id,
+            type="sent",
+            payload={"step": 2},
+            created_at=now - timedelta(minutes=1),
+        )
+        self.db.add_all([audit, draft, blank_event, sent_event])
+        self.db.commit()
+
+        response = self.client.get(f"/leads/{lead.id}/pipeline")
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual([event["type"] for event in body["recent_events"]], ["sent"])
+        self.assertTrue(all(event["id"] != str(blank_event.id) for event in body["recent_events"]))
+
 
 if __name__ == "__main__":
     unittest.main()
