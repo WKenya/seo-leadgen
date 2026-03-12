@@ -149,6 +149,28 @@ class LeadRouteTests(unittest.TestCase):
         self.assertEqual(body["count"], 1)
         self.assertEqual(body["items"][0]["name"], "Gamma HVAC")
 
+    def test_list_leads_q_filter_matches_website_domain_when_website_url_blank(self) -> None:
+        from app.models import Lead
+
+        lead = Lead(
+            id=uuid4(),
+            name="Legacy Domain Only",
+            category="HVAC",
+            source="google_places",
+            website_url="",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.get("/leads", params={"q": "acme", "limit": 10, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["q"], "acme")
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["items"][0]["id"], str(lead.id))
+
     def test_list_leads_status_filter_matches_mixed_case_stored_status(self) -> None:
         now = datetime.now(timezone.utc)
         self._create_lead(name="Gamma HVAC", website_url="https://gamma.example", status="SuPpReSsEd", created_at=now)

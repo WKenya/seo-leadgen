@@ -27,7 +27,7 @@ def list_leads(
         base = base.where(func.lower(func.trim(func.coalesce(Lead.status, ""))) == status_filter.lower())
     if q_filter:
         like = f"%{q_filter}%"
-        base = base.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)))
+        base = base.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)) | (Lead.website_domain.ilike(like)))
     total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
     order_column = Lead.created_at.asc() if sort == "asc" else Lead.created_at.desc()
     stmt = base.order_by(order_column).offset(offset).limit(limit)
