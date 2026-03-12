@@ -160,7 +160,7 @@ Notes:
 - read route event `type` values are normalized (trim+lowercase) for legacy mixed-case/whitespace rows
 - read route event payloads normalize top-level `provider` values (trim+lowercase) from legacy column/payload data
 - read route event metadata fields (`external_id`, `provider_event_*`) are trimmed; blank legacy values normalize to `null`
-- suppression read payloads normalize legacy `email_or_domain`/`reason` whitespace+case
+- suppression read payloads normalize legacy `email_or_domain`/`reason` whitespace+case; blank `reason` defaults to `manual`
 - suppression list/read APIs ignore blank legacy suppression rows
 - `/leads` `status` filter and `/admin/run-audit-batch` `statuses` matching are case-insensitive for legacy mixed-case rows
 - lead read payload `status` values normalize to canonical labels for known states (e.g. legacy `  sUpPrEsSeD  ` -> `Suppressed`)
