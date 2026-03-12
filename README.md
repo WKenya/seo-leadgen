@@ -158,6 +158,7 @@ Notes:
 - crawler internal-link host classification is trim+case-insensitive and handles schemeless URLs (`example.com/path`); missing-host candidates are not treated as internal
 - read route event filters are case-insensitive for both `event_type` and `provider` (legacy mixed-case rows still match)
 - read route event `type` values are normalized (trim+lowercase) for legacy mixed-case/whitespace rows
+- read route event list APIs (`/events`, `/leads/{id}/events`) exclude blank legacy event types from results/counts
 - read route event payloads normalize top-level `provider` values (trim+lowercase) from legacy column/payload data
 - read route event metadata fields (`external_id`, `provider_event_*`) are trimmed; blank legacy values normalize to `null`
 - suppression read payloads normalize legacy `email_or_domain`/`reason` whitespace+case; blank `reason` defaults to `manual`
