@@ -173,6 +173,7 @@ Notes:
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
 - screenshot capture uses Playwright in worker; if browser/runtime missing, audit stores a screenshot error instead of failing the whole audit
 - screenshot artifact paths normalize schemeless/whitespace URLs into stable host slugs (`example.com` instead of `unknown`)
+- screenshot artifact host slugs are hostname-based, so default-port URLs (`https://example.com:443/...`) collapse to `example.com`
 - worker Docker image now installs Playwright Chromium during build (slower/larger build, screenshot-ready)
 
 ## Tests
