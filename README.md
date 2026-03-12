@@ -150,6 +150,7 @@ Notes:
 - admin/webhook/discover/summarize domain fallback parsing also handles schemeless `website_url` values (`example.com/path`)
 - webhook duplicate-event detection trims stored `outreach_events.external_id` for legacy whitespace rows
 - webhook events with blank `event_id` now store `external_id=NULL` (avoid empty-string uniqueness collisions)
+- webhook ingest trims `provider_event_name`/`provider_event_at`; blank values store as `null`
 - discover task domain/suppression matching trims and lowercases legacy stored values
 - discover suppression matching ignores blank suppression rows (prevents false suppression on no-domain leads)
 - discover lead matching trims stored `place_id` values for legacy whitespace rows
