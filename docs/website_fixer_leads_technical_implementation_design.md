@@ -480,6 +480,7 @@ Fallback if Gmail API is too heavy:
 - If lead replies “unsubscribe”:
   - manually check “Opt-out” in Notion OR call an admin endpoint
   - system writes suppression row and prevents future drafts/sends
+- Status note (2026-03-15): suppression keys are canonicalized (`email` lowercase; URL/domain forms -> hostname) and runtime checks include legacy-row normalization fallback.
 
 ---
 
