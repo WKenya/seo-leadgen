@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import secrets
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
@@ -181,7 +182,23 @@ def _first_normalized_email_or_domain(*values: str | None) -> str | None:
     return None
 
 
-def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
+def _build_lead_domain_fallback_lookup(db: Session) -> dict[str, Lead]:
+    lookup: dict[str, Lead] = {}
+    for lead in db.execute(
+        select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))
+    ).scalars():
+        domain = _domain_from_url(lead.website_domain) or _domain_from_url(lead.website_url)
+        if domain:
+            lookup.setdefault(domain, lead)
+    return lookup
+
+
+def _find_lead_by_email_or_domain(
+    db: Session,
+    value: str,
+    *,
+    domain_fallback_lookup: Mapping[str, Lead] | None = None,
+) -> Lead | None:
     normalized = _normalize_email_or_domain(value)
     if not normalized:
         return None
@@ -195,7 +212,11 @@ def _find_lead_by_email_or_domain(db: Session, value: str) -> Lead | None:
     ).scalar_one_or_none()
     if lead is not None:
         return lead
-    for candidate in db.execute(select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))).scalars():
+    if domain_fallback_lookup is not None:
+        return domain_fallback_lookup.get(normalized)
+    for candidate in db.execute(
+        select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))
+    ).scalars():
         candidate_domain = _domain_from_url(candidate.website_domain) or _domain_from_url(candidate.website_url)
         if candidate_domain == normalized:
             return candidate
@@ -456,6 +477,7 @@ async def ingest_outreach_events(
     processed_by_type: dict[str, int] = {}
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
+    domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
 
     for item in body.events:
         event_type = item.event_type.strip().lower()
@@ -475,7 +497,11 @@ async def ingest_outreach_events(
 
         lead = db.get(Lead, item.lead_id) if item.lead_id else None
         if lead is None and item.email_or_domain:
-            lead = _find_lead_by_email_or_domain(db, item.email_or_domain)
+            lead = _find_lead_by_email_or_domain(
+                db,
+                item.email_or_domain,
+                domain_fallback_lookup=domain_fallback_lookup,
+            )
         if lead is None:
             reason = "lead_not_found"
             rejected.append(
@@ -487,6 +513,10 @@ async def ingest_outreach_events(
             )
             rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
+
+        lead_domain = _domain_from_url(lead.website_domain) or _domain_from_url(lead.website_url)
+        if lead_domain:
+            domain_fallback_lookup.setdefault(lead_domain, lead)
 
         provider_value = (item.provider or "").strip().lower() or None
         provider_event_name = _normalize_optional_text(item.provider_event_name)

@@ -311,6 +311,51 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["rejected_by_reason"], {})
 
+    def test_build_lead_domain_fallback_lookup_uses_hostname_for_legacy_rows(self) -> None:
+        from app.models import Lead
+        from app.routes.webhooks import _build_lead_domain_fallback_lookup
+
+        lead = Lead(
+            id=uuid4(),
+            name="Lookup Hostname",
+            category="HVAC",
+            source="google_places",
+            website_url="https://lookup.example:443/path",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        lookup = _build_lead_domain_fallback_lookup(self.db)
+        self.assertIn("lookup.example", lookup)
+        self.assertEqual(lookup["lookup.example"].id, lead.id)
+
+    def test_find_lead_by_email_or_domain_uses_prebuilt_domain_lookup(self) -> None:
+        from app.models import Lead
+        from app.routes.webhooks import _build_lead_domain_fallback_lookup, _find_lead_by_email_or_domain
+
+        lead = Lead(
+            id=uuid4(),
+            name="Lookup Match",
+            category="HVAC",
+            source="google_places",
+            website_url="https://cached.example/path",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        lookup = _build_lead_domain_fallback_lookup(self.db)
+        found = _find_lead_by_email_or_domain(
+            self.db,
+            "cached.example",
+            domain_fallback_lookup=lookup,
+        )
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, lead.id)
+
     def test_webhook_duplicate_event_id_is_counted_and_not_reinserted(self) -> None:
         from app.models import OutreachEvent
 
