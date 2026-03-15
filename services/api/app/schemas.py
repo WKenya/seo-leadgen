@@ -1,4 +1,5 @@
 from datetime import datetime
+from urllib.parse import urlparse
 from uuid import UUID
 
 from pydantic import BaseModel
@@ -31,6 +32,17 @@ def _normalize_lead_status(value: object | None) -> str:
     if not normalized:
         return ""
     return _LEAD_STATUS_LABELS.get(normalized.lower(), normalized)
+
+
+def _normalize_email_or_domain(value: object | None) -> str | None:
+    normalized = _normalize_optional_text(value, lower=True)
+    if not normalized:
+        return None
+    if "@" in normalized:
+        return normalized
+    parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
+    domain = (parsed.hostname or "").strip().lower()
+    return domain or normalized
 
 
 class LeadRead(BaseModel):
@@ -149,9 +161,9 @@ class SuppressionRead(BaseModel):
     def from_model(cls, suppression: object) -> "SuppressionRead":
         raw_email_or_domain = getattr(suppression, "email_or_domain", "")
         raw_reason = getattr(suppression, "reason", "")
-        normalized_email_or_domain = _normalize_optional_text(raw_email_or_domain, lower=True) or str(
-            raw_email_or_domain
-        ).strip().lower()
+        normalized_email_or_domain = (
+            _normalize_email_or_domain(raw_email_or_domain) or str(raw_email_or_domain).strip().lower()
+        )
         normalized_reason = _normalize_optional_text(raw_reason, lower=True) or "manual"
         return cls(
             id=getattr(suppression, "id"),
