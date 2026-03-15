@@ -211,6 +211,39 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["rejected_by_reason"], {})
 
+    def test_webhook_token_mode_resolves_lead_when_email_or_domain_is_url(self) -> None:
+        from app.models import Lead
+
+        lead = Lead(
+            id=uuid4(),
+            name="Domain URL Match",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "events": [
+                    {
+                        "email_or_domain": " https://Acme.Example/path ",
+                        "event_type": "replied",
+                        "event_id": "evt-domain-url-1",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["rejected_by_reason"], {})
+
     def test_webhook_token_mode_resolves_lead_by_website_domain_with_port(self) -> None:
         from app.models import Lead
 
@@ -505,6 +538,34 @@ class WebhookRouteTests(unittest.TestCase):
             "/webhooks/outreach-events",
             headers={"X-Webhook-Token": "test_shared_secret"},
             json={"events": [{"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-fallback-2"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+
+        row = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(row)
+        self.assertEqual(row.email_or_domain, "acme.example")
+
+    def test_webhook_token_mode_canonicalizes_legacy_website_domain_url_for_suppression(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead = Lead(
+            id=uuid4(),
+            name="Legacy Domain URL",
+            category="HVAC",
+            source="google_places",
+            website_url="https://other.example",
+            website_domain="https://Acme.Example/path",
+            email="   ",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={"events": [{"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-fallback-legacy-url"}]},
         )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["processed"], 1)

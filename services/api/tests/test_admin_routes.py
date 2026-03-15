@@ -192,6 +192,22 @@ class AdminRouteTests(unittest.TestCase):
         refreshed_lead = self.db.get(Lead, lead.id)
         self.assertEqual(refreshed_lead.status, "Suppressed")
 
+    def test_approve_draft_blocked_when_suppression_row_is_legacy_url(self) -> None:
+        from app.models import Lead, Suppression
+
+        lead, _, draft = self._create_lead_with_draft(lead_email=None)
+        lead.website_domain = None
+        lead.website_url = "https://acme.example/path"
+        self.db.add(Suppression(email_or_domain="https://Acme.Example/legacy", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/approve-draft/{draft.id}")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        refreshed_lead = self.db.get(Lead, lead.id)
+        self.assertEqual(refreshed_lead.status, "Suppressed")
+
     def test_approve_draft_blocked_when_suppressed_by_website_domain_with_port(self) -> None:
         from app.models import Lead, Suppression
 
@@ -369,6 +385,21 @@ class AdminRouteTests(unittest.TestCase):
         suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
         self.assertIsNotNone(suppression)
         self.assertEqual(suppression.email_or_domain, "owner@acme.example")
+
+    def test_mark_optout_normalizes_url_email_or_domain_to_hostname(self) -> None:
+        from app.models import Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        response = self.client.post(
+            f"/admin/mark-optout/{lead.id}",
+            json={"reason": "manual", "email_or_domain": " https://Acme.Example/path "},
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "suppressed")
+
+        suppression = self.db.execute(select(Suppression)).scalar_one_or_none()
+        self.assertIsNotNone(suppression)
+        self.assertEqual(suppression.email_or_domain, "acme.example")
 
     def test_mark_optout_normalizes_reason(self) -> None:
         from app.models import OutreachEvent, Suppression

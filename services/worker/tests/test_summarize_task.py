@@ -68,11 +68,18 @@ class _FakeSession:
 
 
 class _FakeScalarResult:
-    def __init__(self, row):  # noqa: ANN001
+    def __init__(self, row, rows=None):  # noqa: ANN001
         self.row = row
+        self.rows = list(rows or [])
 
     def scalar_one_or_none(self):  # noqa: ANN001
         return self.row
+
+    def scalars(self):  # noqa: ANN001
+        return self
+
+    def __iter__(self):
+        return iter(self.rows)
 
 
 class _CaseAwareSuppressionSession:
@@ -83,6 +90,9 @@ class _CaseAwareSuppressionSession:
         where = list(statement._where_criteria)
         criterion = where[0]
         criterion_text = str(criterion).lower()
+        if "is not null" in criterion_text:
+            rows = [SimpleNamespace(email_or_domain=value) for value in self.stored_values]
+            return _FakeScalarResult(None, rows=rows)
         is_lower_query = getattr(criterion.left, "name", "") == "lower" or "lower(" in criterion_text
         is_trim_query = "trim(" in criterion_text
         candidates = [str(value) for value in criterion.right.value]
@@ -254,6 +264,20 @@ class SummarizeTaskTests(unittest.TestCase):
             status="Audited",
         )
         session = _CaseAwareSuppressionSession(stored_values=["acme.example"])
+        self.assertTrue(summarize._is_suppressed(session, lead))
+
+    def test_is_suppressed_matches_legacy_url_suppression_row(self) -> None:
+        lead = summarize.Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="test",
+            website_url="https://acme.example/home",
+            website_domain=None,
+            email=None,
+            status="Audited",
+        )
+        session = _CaseAwareSuppressionSession(stored_values=["https://Acme.Example/path"])
         self.assertTrue(summarize._is_suppressed(session, lead))
 
 

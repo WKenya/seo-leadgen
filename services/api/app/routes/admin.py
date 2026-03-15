@@ -64,14 +64,18 @@ def _domain_from_url(url: str | None) -> str | None:
     if not normalized:
         return None
     parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
-    return parsed.hostname or None
+    return (parsed.hostname or "").strip().lower() or None
 
 
 def _normalize_suppression_value(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower()
-    return normalized or None
+    if not normalized:
+        return None
+    if "@" in normalized:
+        return normalized
+    return _domain_from_url(normalized) or normalized
 
 
 def _normalize_suppression_reason(reason: str | None, *, default: str = "manual") -> str:
@@ -92,12 +96,17 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
         keys.append(domain)
     if not keys:
         return False
-    return (
+    if (
         db.execute(
             select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(keys))
         ).scalar_one_or_none()
         is not None
-    )
+    ):
+        return True
+    for row in db.execute(select(Suppression).where(Suppression.email_or_domain.is_not(None))).scalars():
+        if _normalize_suppression_value(row.email_or_domain) in keys:
+            return True
+    return False
 
 
 def _sent_count_today(db: Session) -> int:

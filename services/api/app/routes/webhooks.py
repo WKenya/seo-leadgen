@@ -159,7 +159,11 @@ def _normalize_email_or_domain(value: str | None) -> str | None:
     if value is None:
         return None
     normalized = value.strip().lower()
-    return normalized or None
+    if not normalized:
+        return None
+    if "@" in normalized:
+        return normalized
+    return _domain_from_url(normalized) or normalized
 
 
 def _normalize_optional_text(value: str | None) -> str | None:

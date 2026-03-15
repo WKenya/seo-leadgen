@@ -25,13 +25,24 @@ def _lead_domain(website_url: str | None) -> str | None:
     return (parsed.hostname or "").strip().lower() or None
 
 
+def _normalize_suppression_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if "@" in normalized:
+        return normalized
+    return _lead_domain(normalized) or normalized
+
+
 def _is_suppressed(session, lead: Lead) -> bool:
     values = []
     if lead.email:
-        normalized_email = lead.email.strip().lower()
+        normalized_email = _normalize_suppression_value(lead.email)
         if normalized_email:
             values.append(normalized_email)
-    domain = _lead_domain(lead.website_domain) or _lead_domain(lead.website_url)
+    domain = _normalize_suppression_value(lead.website_domain) or _normalize_suppression_value(lead.website_url)
     if domain:
         values.append(domain)
     if not values:
@@ -39,7 +50,12 @@ def _is_suppressed(session, lead: Lead) -> bool:
     row = session.execute(
         select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(values))
     ).scalar_one_or_none()
-    return row is not None
+    if row is not None:
+        return True
+    for candidate in session.execute(select(Suppression).where(Suppression.email_or_domain.is_not(None))).scalars():
+        if _normalize_suppression_value(candidate.email_or_domain) in values:
+            return True
+    return False
 
 
 def _quick_win_from_issue(issue: Issue) -> QuickWin:

@@ -22,6 +22,17 @@ def _domain(url: str | None) -> str | None:
     return (parsed.hostname or "").strip().lower() or None
 
 
+def _normalize_suppression_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if "@" in normalized:
+        return normalized
+    return _domain(normalized) or normalized
+
+
 def _build_domain_fallback_lookup(session) -> dict[str, Lead]:
     lookup: dict[str, Lead] = {}
     for lead in session.execute(
@@ -73,7 +84,7 @@ def _find_existing_lead(
 def _suppression_values(session) -> set[str]:
     values: set[str] = set()
     for row in session.execute(select(Suppression)).scalars():
-        normalized = (row.email_or_domain or "").strip().lower()
+        normalized = _normalize_suppression_value(row.email_or_domain)
         if normalized:
             values.add(normalized)
     return values

@@ -216,6 +216,13 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         values = _suppression_values(self.session)
         self.assertIn("acme.example", values)
 
+    def test_suppression_values_normalizes_legacy_url_rows(self) -> None:
+        self.session.add(Suppression(email_or_domain="  https://Acme.Example/path  ", reason="opt_out"))
+        self.session.commit()
+
+        values = _suppression_values(self.session)
+        self.assertIn("acme.example", values)
+
     def test_suppression_values_ignores_blank_rows(self) -> None:
         self.session.add(Suppression(email_or_domain="   ", reason="opt_out"))
         self.session.commit()
