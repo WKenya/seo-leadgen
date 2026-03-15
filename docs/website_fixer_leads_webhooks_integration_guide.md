@@ -64,7 +64,7 @@ Notes:
 - Legacy fallback (`website_url`/non-canonical `website_domain`) uses normalized hostname matching with a request-scoped lookup cache to avoid repeated full-table scans.
 - Optional incoming `event_id` maps to `outreach_events.external_id` (idempotency key).
 - Duplicate `event_id` is skipped and counted in response `duplicates`.
-- Incoming `email_or_domain` values are canonicalized before matching/persistence: emails lowercased; URL/domain forms collapsed to hostname.
+- Incoming `email_or_domain` values are canonicalized before matching/persistence: strict email-shaped values are lowercased; URL/domain forms (including URL userinfo variants) collapse to hostname.
 - Provider value is normalized to lowercase and persisted in `outreach_events.provider` (indexed for read/metrics filters).
 - Provider-adapted events store canonical metadata in `outreach_events.payload`:
   - `provider`
