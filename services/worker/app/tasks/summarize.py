@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -13,6 +14,8 @@ from app.settings import get_settings
 from app.db import SessionLocal
 from app.tasks.task_failures import log_task_failure_for_lead
 from app.worker import celery_app
+
+_EMAIL_OR_DOMAIN_PATTERN = re.compile(r"^[^/@\s]+@[^/@\s]+$")
 
 
 def _lead_domain(website_url: str | None) -> str | None:
@@ -31,7 +34,7 @@ def _normalize_suppression_value(value: str | None) -> str | None:
     normalized = value.strip().lower()
     if not normalized:
         return None
-    if "@" in normalized:
+    if _EMAIL_OR_DOMAIN_PATTERN.fullmatch(normalized):
         return normalized
     return _lead_domain(normalized) or normalized
 

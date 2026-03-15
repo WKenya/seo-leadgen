@@ -718,6 +718,19 @@ class ReadRouteTests(unittest.TestCase):
         self.assertEqual(body["count"], 1)
         self.assertEqual(body["items"][0]["email_or_domain"], "legacy.example")
 
+    def test_list_suppression_normalizes_legacy_url_rows_with_userinfo(self) -> None:
+        from app.models import Suppression
+
+        self._seed_lead_bundle()
+        self.db.add(Suppression(email_or_domain="https://user@legacy.example/path", reason="opt_out"))
+        self.db.commit()
+
+        response = self.client.get("/suppression", params={"q": "legacy", "limit": 10, "offset": 0})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["items"][0]["email_or_domain"], "legacy.example")
+
     def test_list_suppression_defaults_blank_legacy_reason_to_manual(self) -> None:
         from app.models import Suppression
 

@@ -36,7 +36,7 @@ def upgrade() -> None:
                 normalized_reason,
                 raw_value,
                 CASE
-                    WHEN position('@' IN raw_value) > 0 THEN raw_value
+                    WHEN raw_value ~ '^[^/@\\s]+@[^/@\\s]+$' THEN raw_value
                     ELSE nullif(
                         split_part(
                             regexp_replace(
@@ -89,4 +89,3 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Data normalization/backfill is irreversible.
     pass
-

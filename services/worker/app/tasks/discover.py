@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import re
 from urllib.parse import urlparse
 
 from sqlalchemy import func, select
@@ -10,6 +11,8 @@ from app.discovery.google_places import GooglePlacesClient
 from app.models import Lead, Suppression
 from app.settings import get_settings
 from app.worker import celery_app
+
+_EMAIL_OR_DOMAIN_PATTERN = re.compile(r"^[^/@\s]+@[^/@\s]+$")
 
 
 def _domain(url: str | None) -> str | None:
@@ -28,7 +31,7 @@ def _normalize_suppression_value(value: str | None) -> str | None:
     normalized = value.strip().lower()
     if not normalized:
         return None
-    if "@" in normalized:
+    if _EMAIL_OR_DOMAIN_PATTERN.fullmatch(normalized):
         return normalized
     return _domain(normalized) or normalized
 

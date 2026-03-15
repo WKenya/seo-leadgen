@@ -244,6 +244,39 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["rejected_by_reason"], {})
 
+    def test_webhook_token_mode_resolves_lead_when_email_or_domain_url_has_userinfo(self) -> None:
+        from app.models import Lead
+
+        lead = Lead(
+            id=uuid4(),
+            name="Domain URL Userinfo Match",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        response = self.client.post(
+            "/webhooks/outreach-events",
+            headers={"X-Webhook-Token": "test_shared_secret"},
+            json={
+                "events": [
+                    {
+                        "email_or_domain": " https://user@Acme.Example/path ",
+                        "event_type": "replied",
+                        "event_id": "evt-domain-url-userinfo-1",
+                    }
+                ]
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["rejected_by_reason"], {})
+
     def test_webhook_token_mode_resolves_lead_by_website_domain_with_port(self) -> None:
         from app.models import Lead
 

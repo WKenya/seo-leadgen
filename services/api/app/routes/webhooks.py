@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ from app.settings import get_settings
 from app.webhook_auth import verify_hmac_request, verify_mailgun_signature, verify_sendgrid_signature
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+_EMAIL_OR_DOMAIN_PATTERN = re.compile(r"^[^/@\s]+@[^/@\s]+$")
 
 
 class OutreachWebhookEvent(BaseModel):
@@ -161,7 +163,7 @@ def _normalize_email_or_domain(value: str | None) -> str | None:
     normalized = value.strip().lower()
     if not normalized:
         return None
-    if "@" in normalized:
+    if _EMAIL_OR_DOMAIN_PATTERN.fullmatch(normalized):
         return normalized
     return _domain_from_url(normalized) or normalized
 

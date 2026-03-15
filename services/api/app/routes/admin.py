@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import re
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -13,6 +14,7 @@ from app.queue import celery_client
 from app.settings import get_settings
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+_EMAIL_OR_DOMAIN_PATTERN = re.compile(r"^[^/@\s]+@[^/@\s]+$")
 
 
 class OptOutRequest(BaseModel):
@@ -73,7 +75,7 @@ def _normalize_suppression_value(value: str | None) -> str | None:
     normalized = value.strip().lower()
     if not normalized:
         return None
-    if "@" in normalized:
+    if _EMAIL_OR_DOMAIN_PATTERN.fullmatch(normalized):
         return normalized
     return _domain_from_url(normalized) or normalized
 

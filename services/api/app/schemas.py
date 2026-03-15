@@ -1,4 +1,5 @@
 from datetime import datetime
+import re
 from urllib.parse import urlparse
 from uuid import UUID
 
@@ -14,6 +15,7 @@ _LEAD_STATUS_LABELS = {
     "replied": "Replied",
     "suppressed": "Suppressed",
 }
+_EMAIL_OR_DOMAIN_PATTERN = re.compile(r"^[^/@\s]+@[^/@\s]+$")
 
 
 def _normalize_optional_text(value: object | None, *, lower: bool = False) -> str | None:
@@ -38,7 +40,7 @@ def _normalize_email_or_domain(value: object | None) -> str | None:
     normalized = _normalize_optional_text(value, lower=True)
     if not normalized:
         return None
-    if "@" in normalized:
+    if _EMAIL_OR_DOMAIN_PATTERN.fullmatch(normalized):
         return normalized
     parsed = urlparse(normalized if "://" in normalized else f"https://{normalized}")
     domain = (parsed.hostname or "").strip().lower()
