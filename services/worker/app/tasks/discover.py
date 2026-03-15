@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from urllib.parse import urlparse
 
 from sqlalchemy import func, select
@@ -21,7 +22,24 @@ def _domain(url: str | None) -> str | None:
     return (parsed.hostname or "").strip().lower() or None
 
 
-def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | None:
+def _build_domain_fallback_lookup(session) -> dict[str, Lead]:
+    lookup: dict[str, Lead] = {}
+    for lead in session.execute(
+        select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))
+    ).scalars():
+        domain = _domain(lead.website_domain) or _domain(lead.website_url)
+        if domain:
+            lookup.setdefault(domain, lead)
+    return lookup
+
+
+def _find_existing_lead(
+    session,
+    *,
+    place_id: str,
+    website_url: str,
+    domain_fallback_lookup: Mapping[str, Lead] | None = None,
+) -> Lead | None:
     normalized_place_id = (place_id or "").strip()
     if normalized_place_id:
         lead = session.execute(
@@ -40,7 +58,12 @@ def _find_existing_lead(session, *, place_id: str, website_url: str) -> Lead | N
     if lead is not None:
         return lead
 
-    for candidate in session.execute(select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))).scalars():
+    if domain_fallback_lookup is not None:
+        return domain_fallback_lookup.get(target_domain)
+
+    for candidate in session.execute(
+        select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))
+    ).scalars():
         candidate_domain = _domain(candidate.website_domain) or _domain(candidate.website_url)
         if candidate_domain == target_domain:
             return candidate
@@ -78,6 +101,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
     notion_sync_lead_ids: list[str] = []
     with SessionLocal() as session:
         suppression_values = _suppression_values(session)
+        domain_fallback_lookup = _build_domain_fallback_lookup(session)
         for item in discovered:
             lead_domain = _domain(item.website_url) or ""
             is_suppressed = lead_domain in suppression_values
@@ -85,6 +109,7 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                 session,
                 place_id=item.place_id,
                 website_url=item.website_url,
+                domain_fallback_lookup=domain_fallback_lookup,
             )
             if lead is None:
                 lead = Lead(
@@ -100,6 +125,8 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                 )
                 session.add(lead)
                 session.flush()
+                if lead_domain:
+                    domain_fallback_lookup.setdefault(lead_domain, lead)
                 created += 1
                 if is_suppressed:
                     suppressed += 1
@@ -125,6 +152,8 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                 lead.status = desired_status
                 changed = True
             if changed:
+                if lead_domain:
+                    domain_fallback_lookup.setdefault(lead_domain, lead)
                 updated += 1
                 notion_sync_lead_ids.append(str(lead.id))
             else:

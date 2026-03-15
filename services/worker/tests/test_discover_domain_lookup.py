@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models import Lead, Suppression
-from app.tasks.discover import _find_existing_lead, _suppression_values
+from app.tasks.discover import _build_domain_fallback_lookup, _find_existing_lead, _suppression_values
 
 
 class DiscoverDomainLookupTests(unittest.TestCase):
@@ -168,6 +168,44 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.session.commit()
 
         found = _find_existing_lead(self.session, place_id="new-place", website_url="https://legacy.example/contact")
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, lead.id)
+
+    def test_build_domain_fallback_lookup_uses_hostname_for_legacy_rows(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Legacy URL Port",
+            source="google_places",
+            website_url="https://legacy.example:443/home",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        lookup = _build_domain_fallback_lookup(self.session)
+        self.assertIn("legacy.example", lookup)
+        self.assertEqual(lookup["legacy.example"].id, lead.id)
+
+    def test_find_existing_lead_uses_prebuilt_domain_lookup(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Lookup Match",
+            source="google_places",
+            website_url="https://lookup.example/home",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        lookup = _build_domain_fallback_lookup(self.session)
+        found = _find_existing_lead(
+            self.session,
+            place_id="new-place",
+            website_url="https://lookup.example/contact",
+            domain_fallback_lookup=lookup,
+        )
         self.assertIsNotNone(found)
         self.assertEqual(found.id, lead.id)
 
