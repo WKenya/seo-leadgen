@@ -226,6 +226,25 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.json()["processed"], 1)
         build_lookup_mock.assert_not_called()
 
+    def test_webhook_token_mode_caches_repeated_lead_id_lookup(self) -> None:
+        lead = self._create_lead()
+
+        with patch.object(self.db, "get", wraps=self.db.get) as get_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json={
+                    "events": [
+                        {"lead_id": str(lead.id), "event_type": "replied", "event_id": "evt-lead-cache-1"},
+                        {"lead_id": str(lead.id), "event_type": "replied", "event_id": "evt-lead-cache-2"},
+                    ]
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 2)
+        self.assertEqual(get_mock.call_count, 1)
+
     def test_webhook_token_mode_builds_domain_lookup_on_email_or_domain_fallback(self) -> None:
         from app.models import Lead
 
