@@ -484,6 +484,19 @@ async def ingest_outreach_events(
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
     domain_fallback_lookup: dict[str, Lead] | None = None
+    external_id_expr = func.trim(func.coalesce(OutreachEvent.external_id, ""))
+    candidate_external_ids = {
+        external_id
+        for item in body.events
+        if item.event_type.strip().lower() in allowed
+        for external_id in [((item.event_id or "").strip())]
+        if external_id
+    }
+    seen_external_ids = (
+        set(db.scalars(select(external_id_expr).where(external_id_expr.in_(candidate_external_ids))).all())
+        if candidate_external_ids
+        else set()
+    )
 
     for item in body.events:
         event_type = item.event_type.strip().lower()
@@ -493,13 +506,9 @@ async def ingest_outreach_events(
             rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
         external_id = (item.event_id or "").strip() or None
-        if external_id:
-            exists = db.execute(
-                select(OutreachEvent).where(func.trim(func.coalesce(OutreachEvent.external_id, "")) == external_id)
-            ).scalar_one_or_none()
-            if exists is not None:
-                duplicates += 1
-                continue
+        if external_id and external_id in seen_external_ids:
+            duplicates += 1
+            continue
 
         lead = db.get(Lead, item.lead_id) if item.lead_id else None
         if lead is None and item.email_or_domain:
@@ -558,6 +567,8 @@ async def ingest_outreach_events(
                 },
             )
         )
+        if external_id:
+            seen_external_ids.add(external_id)
         processed += 1
         processed_by_type[event_type] = processed_by_type.get(event_type, 0) + 1
         if provider_value:

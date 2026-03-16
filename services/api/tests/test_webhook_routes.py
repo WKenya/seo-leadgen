@@ -509,6 +509,48 @@ class WebhookRouteTests(unittest.TestCase):
         events = self.db.execute(select(OutreachEvent)).scalars().all()
         self.assertEqual(len(events), 1)
 
+    def test_webhook_duplicate_event_id_within_batch_is_counted(self) -> None:
+        from app.models import OutreachEvent
+
+        lead = self._create_lead()
+        payload = {
+            "events": [
+                {"lead_id": str(lead.id), "event_type": "replied", "event_id": "evt-batch-dup-1"},
+                {"lead_id": str(lead.id), "event_type": "replied", "event_id": "evt-batch-dup-1"},
+            ]
+        }
+        headers = {"X-Webhook-Token": "test_shared_secret"}
+        response = self.client.post("/webhooks/outreach-events", headers=headers, json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["duplicates"], 1)
+        self.assertEqual(body["rejected_by_reason"], {})
+
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertEqual(len(events), 1)
+
+    def test_webhook_duplicate_event_id_rejected_event_does_not_reserve_id(self) -> None:
+        from app.models import OutreachEvent
+
+        lead = self._create_lead()
+        payload = {
+            "events": [
+                {"lead_id": str(uuid4()), "event_type": "replied", "event_id": "evt-reject-then-ok-1"},
+                {"lead_id": str(lead.id), "event_type": "replied", "event_id": "evt-reject-then-ok-1"},
+            ]
+        }
+        headers = {"X-Webhook-Token": "test_shared_secret"}
+        response = self.client.post("/webhooks/outreach-events", headers=headers, json=payload)
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual(body["processed"], 1)
+        self.assertEqual(body["duplicates"], 0)
+        self.assertEqual(body["rejected_by_reason"], {"lead_not_found": 1})
+
+        events = self.db.execute(select(OutreachEvent)).scalars().all()
+        self.assertEqual(len(events), 1)
+
     def test_webhook_token_mode_blank_event_id_normalizes_to_none(self) -> None:
         from app.models import OutreachEvent
 
