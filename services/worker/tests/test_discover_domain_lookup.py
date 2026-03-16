@@ -313,7 +313,16 @@ class DiscoverDomainLookupTests(unittest.TestCase):
             website_domain="b.example",
             status="Discovered",
         )
-        self.session.add_all([first, second])
+        third = Lead(
+            id=uuid4(),
+            name="Dup Place C",
+            source="google_places",
+            place_id="dup-place",
+            website_url="https://c.example",
+            website_domain="c.example",
+            status="Discovered",
+        )
+        self.session.add_all([first, second, third])
         self.session.commit()
 
         cache = _prefill_place_id_lookup_cache(self.session, place_ids={"dup-place"})
@@ -355,7 +364,15 @@ class DiscoverDomainLookupTests(unittest.TestCase):
             website_domain="  DUP.EXAMPLE  ",
             status="Discovered",
         )
-        self.session.add_all([first, second])
+        third = Lead(
+            id=uuid4(),
+            name="Dup Domain C",
+            source="google_places",
+            website_url="https://c.example",
+            website_domain="dup.example",
+            status="Discovered",
+        )
+        self.session.add_all([first, second, third])
         self.session.commit()
 
         cache = _prefill_website_domain_lookup_cache(self.session, website_domains={"dup.example"})

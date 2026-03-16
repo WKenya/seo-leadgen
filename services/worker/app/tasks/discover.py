@@ -63,23 +63,24 @@ def _prefill_place_id_lookup_cache(session, *, place_ids: set[str]) -> dict[str,
         return {}
 
     normalized_place_id = func.trim(func.coalesce(Lead.place_id, ""))
-    duplicate_place_ids = set(
-        session.execute(
-            select(normalized_place_id)
-            .where(normalized_place_id.in_(normalized_place_ids))
-            .group_by(normalized_place_id)
-            .having(func.count() > 1)
-        ).scalars()
-    )
-    unique_place_ids = normalized_place_ids - duplicate_place_ids
-    cache: dict[str, Lead | None] = {place_id: None for place_id in unique_place_ids}
-    if not unique_place_ids:
-        return cache
+    cache: dict[str, Lead | None] = {}
+    ambiguous_place_ids: set[str] = set()
+    for lead, normalized in session.execute(
+        select(Lead, normalized_place_id.label("normalized")).where(normalized_place_id.in_(normalized_place_ids))
+    ).all():
+        normalized_value = str(normalized or "").strip()
+        if not normalized_value:
+            continue
+        if normalized_value in ambiguous_place_ids:
+            continue
+        if normalized_value in cache:
+            ambiguous_place_ids.add(normalized_value)
+            cache.pop(normalized_value, None)
+            continue
+        cache[normalized_value] = lead
 
-    for lead in session.execute(select(Lead).where(normalized_place_id.in_(unique_place_ids))).scalars():
-        normalized = (lead.place_id or "").strip()
-        if normalized and normalized in cache and cache[normalized] is None:
-            cache[normalized] = lead
+    for normalized_value in normalized_place_ids - set(cache) - ambiguous_place_ids:
+        cache[normalized_value] = None
     return cache
 
 
@@ -89,23 +90,24 @@ def _prefill_website_domain_lookup_cache(session, *, website_domains: set[str]) 
         return {}
 
     normalized_website_domain = func.lower(func.trim(func.coalesce(Lead.website_domain, "")))
-    duplicate_domains = set(
-        session.execute(
-            select(normalized_website_domain)
-            .where(normalized_website_domain.in_(normalized_domains))
-            .group_by(normalized_website_domain)
-            .having(func.count() > 1)
-        ).scalars()
-    )
-    unique_domains = normalized_domains - duplicate_domains
-    cache: dict[str, Lead | None] = {domain: None for domain in unique_domains}
-    if not unique_domains:
-        return cache
+    cache: dict[str, Lead | None] = {}
+    ambiguous_domains: set[str] = set()
+    for lead, normalized in session.execute(
+        select(Lead, normalized_website_domain.label("normalized")).where(normalized_website_domain.in_(normalized_domains))
+    ).all():
+        normalized_value = str(normalized or "").strip().lower()
+        if not normalized_value:
+            continue
+        if normalized_value in ambiguous_domains:
+            continue
+        if normalized_value in cache:
+            ambiguous_domains.add(normalized_value)
+            cache.pop(normalized_value, None)
+            continue
+        cache[normalized_value] = lead
 
-    for lead in session.execute(select(Lead).where(normalized_website_domain.in_(unique_domains))).scalars():
-        normalized = ((lead.website_domain or "").strip().lower()) or None
-        if normalized and normalized in cache and cache[normalized] is None:
-            cache[normalized] = lead
+    for normalized_value in normalized_domains - set(cache) - ambiguous_domains:
+        cache[normalized_value] = None
     return cache
 
 
