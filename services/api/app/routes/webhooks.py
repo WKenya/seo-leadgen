@@ -259,19 +259,20 @@ def _prefill_lead_lookup_cache(
 
     domain_prefill_candidates = normalized_values - set(cache) - ambiguous_email_values
     ambiguous_domain_values: set[str] = set()
-    for lead, normalized in db.execute(
-        select(Lead, domain_expr.label("normalized")).where(domain_expr.in_(domain_prefill_candidates))
-    ).all():
-        normalized_value = str(normalized or "")
-        if not normalized_value:
-            continue
-        if normalized_value in ambiguous_domain_values:
-            continue
-        if normalized_value in cache:
-            ambiguous_domain_values.add(normalized_value)
-            cache.pop(normalized_value, None)
-            continue
-        cache[normalized_value] = lead
+    if domain_prefill_candidates:
+        for lead, normalized in db.execute(
+            select(Lead, domain_expr.label("normalized")).where(domain_expr.in_(domain_prefill_candidates))
+        ).all():
+            normalized_value = str(normalized or "")
+            if not normalized_value:
+                continue
+            if normalized_value in ambiguous_domain_values:
+                continue
+            if normalized_value in cache:
+                ambiguous_domain_values.add(normalized_value)
+                cache.pop(normalized_value, None)
+                continue
+            cache[normalized_value] = lead
 
     unresolved = domain_prefill_candidates - set(cache) - ambiguous_domain_values
     if unresolved:

@@ -540,6 +540,24 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(row.reason, "opt_out")
         self.assertIn("owner@acme.example", existing_values)
 
+    def test_prefill_lead_lookup_cache_skips_empty_domain_prefill_query(self) -> None:
+        from app.routes.webhooks import _prefill_lead_lookup_cache
+
+        db = MagicMock()
+        execute_result = MagicMock()
+        lead = object()
+        execute_result.all.return_value = [(lead, "owner@acme.example")]
+        db.execute.return_value = execute_result
+
+        cache, domain_lookup = _prefill_lead_lookup_cache(
+            db,
+            normalized_values={"owner@acme.example"},
+        )
+
+        self.assertEqual(db.execute.call_count, 1)
+        self.assertIs(cache["owner@acme.example"], lead)
+        self.assertIsNone(domain_lookup)
+
     def test_build_lead_domain_fallback_lookup_uses_hostname_for_legacy_rows(self) -> None:
         from app.models import Lead
         from app.routes.webhooks import _build_lead_domain_fallback_lookup
