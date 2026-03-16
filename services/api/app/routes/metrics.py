@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -74,20 +74,23 @@ def metrics_summary(
     status_rows = db.execute(select(status_column.label("status"), func.count()).group_by(status_column).order_by(status_column)).all()
     leads_by_status = {_status_label(str(status or "")): int(count) for status, count in status_rows}
 
-    drafts_total = int(db.execute(select(func.count()).select_from(EmailDraft)).scalar_one())
-    drafts_approved = int(
-        db.execute(select(func.count()).select_from(EmailDraft).where(EmailDraft.approved_at.is_not(None))).scalar_one()
-    )
-    drafts_created_today = int(
-        db.execute(
-            select(func.count()).select_from(EmailDraft).where(EmailDraft.created_at >= start, EmailDraft.created_at < end)
-        ).scalar_one()
-    )
-    drafts_sent_today = int(
-        db.execute(
-            select(func.count()).select_from(EmailDraft).where(EmailDraft.sent_at >= start, EmailDraft.sent_at < end)
-        ).scalar_one()
-    )
+    (
+        drafts_total_raw,
+        drafts_approved_raw,
+        drafts_created_today_raw,
+        drafts_sent_today_raw,
+    ) = db.execute(
+        select(
+            func.count(EmailDraft.id),
+            func.sum(case((EmailDraft.approved_at.is_not(None), 1), else_=0)),
+            func.sum(case((and_(EmailDraft.created_at >= start, EmailDraft.created_at < end), 1), else_=0)),
+            func.sum(case((and_(EmailDraft.sent_at >= start, EmailDraft.sent_at < end), 1), else_=0)),
+        )
+    ).one()
+    drafts_total = int(drafts_total_raw or 0)
+    drafts_approved = int(drafts_approved_raw or 0)
+    drafts_created_today = int(drafts_created_today_raw or 0)
+    drafts_sent_today = int(drafts_sent_today_raw or 0)
     audits_today = int(
         db.execute(select(func.count()).select_from(Audit).where(Audit.started_at >= start, Audit.started_at < end)).scalar_one()
     )
