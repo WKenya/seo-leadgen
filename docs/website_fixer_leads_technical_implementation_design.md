@@ -496,7 +496,7 @@ Public (or internal-only behind auth):
 - `POST /admin/mark-optout/{lead_id}`
 
 API is primarily for your internal use and Notion artifact links.
-Status note (2026-03-16): webhook ingest now lazily builds domain fallback lookup only when `email_or_domain` resolution is needed, and batch-prefetches trimmed `external_id` values once per request to reduce per-event duplicate-id queries while preserving duplicate/rejection semantics.
+Status note (2026-03-16): webhook ingest now lazily builds domain fallback lookup only when `email_or_domain` resolution is needed, caches normalized `email_or_domain` lead matches per payload, and batch-prefetches trimmed `external_id` values once per request to reduce per-event duplicate-id and lead-resolution queries while preserving duplicate/rejection semantics.
 
 ---
 
