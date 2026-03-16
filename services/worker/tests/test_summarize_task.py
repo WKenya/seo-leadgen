@@ -113,6 +113,40 @@ class _CaseAwareSuppressionSession:
 
 
 class SummarizeTaskTests(unittest.TestCase):
+    def test_ensure_compliance_footer_appends_missing_lines(self) -> None:
+        settings = SimpleNamespace(
+            sender_name="Website Fixer",
+            sender_email="ops@example.com",
+            physical_address="PO Box 123, Cleveland, OH 44101",
+            opt_out_instructions='Reply "unsubscribe"',
+        )
+        body = "Hi team,\n\nFound two quick wins."
+        with_footer = summarize._ensure_compliance_footer(body, settings)
+        self.assertIn("Website Fixer", with_footer)
+        self.assertIn("ops@example.com", with_footer)
+        self.assertIn("PO Box 123, Cleveland, OH 44101", with_footer)
+        self.assertIn('Reply "unsubscribe"', with_footer)
+
+    def test_ensure_compliance_footer_does_not_duplicate_existing_lines(self) -> None:
+        settings = SimpleNamespace(
+            sender_name="Website Fixer",
+            sender_email="ops@example.com",
+            physical_address="PO Box 123, Cleveland, OH 44101",
+            opt_out_instructions='Reply "unsubscribe"',
+        )
+        body = (
+            "Hi team,\n\nFound two quick wins.\n\n"
+            "Website Fixer\n"
+            "ops@example.com\n"
+            "PO Box 123, Cleveland, OH 44101\n"
+            'Reply "unsubscribe"'
+        )
+        with_footer = summarize._ensure_compliance_footer(body, settings)
+        self.assertEqual(with_footer.count("Website Fixer"), 1)
+        self.assertEqual(with_footer.count("ops@example.com"), 1)
+        self.assertEqual(with_footer.count("PO Box 123, Cleveland, OH 44101"), 1)
+        self.assertEqual(with_footer.count('Reply "unsubscribe"'), 1)
+
     def test_summarize_uses_session_only_inside_context(self) -> None:
         lead_id = uuid4()
         audit_id = uuid4()
@@ -131,7 +165,15 @@ class SummarizeTaskTests(unittest.TestCase):
             final_url="https://acme.example",
         )
         fake_session = _FakeSession(lead=lead, audit=audit, issues=[])
-        settings = SimpleNamespace(openai_api_key=None, openai_model=None, openai_base_url=None)
+        settings = SimpleNamespace(
+            openai_api_key=None,
+            openai_model=None,
+            openai_base_url=None,
+            sender_name="Website Fixer",
+            sender_email="ops@example.com",
+            physical_address="PO Box 123, Cleveland, OH 44101",
+            opt_out_instructions='Reply "unsubscribe"',
+        )
         draft_output = DraftOutput(
             lead_profile="This is a regression-safe fallback profile for summarize task tests.",
             quick_wins=[

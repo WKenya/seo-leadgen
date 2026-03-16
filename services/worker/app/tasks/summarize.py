@@ -194,6 +194,21 @@ def _build_fallback_draft(lead: Lead, audit: Audit, issues: list[Issue], setting
     )
 
 
+def _ensure_compliance_footer(body_text: str, settings) -> str:  # noqa: ANN001
+    body = (body_text or "").rstrip()
+    footer_lines = [settings.sender_name, settings.sender_email, settings.physical_address, settings.opt_out_instructions]
+    footer_lines = [str(line or "").strip() for line in footer_lines]
+    footer_lines = [line for line in footer_lines if line]
+    if not footer_lines:
+        return body
+    normalized_body = body.lower()
+    missing_lines = [line for line in footer_lines if line.lower() not in normalized_body]
+    if not missing_lines:
+        return body
+    separator = "\n\n" if body else ""
+    return f"{body}{separator}" + "\n".join(missing_lines)
+
+
 @celery_app.task(name="summarize_and_draft")
 def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
     settings = get_settings()
@@ -246,6 +261,7 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
                     draft_output = _build_fallback_draft(lead, audit, issues, settings)
             else:
                 draft_output = _build_fallback_draft(lead, audit, issues, settings)
+            draft_output.email_body_text = _ensure_compliance_footer(draft_output.email_body_text, settings)
 
             draft = EmailDraft(
                 lead_id=lead.id,
