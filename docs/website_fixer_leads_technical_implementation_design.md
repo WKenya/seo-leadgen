@@ -312,12 +312,12 @@ Create these views in the Notion `Leads` database after properties exist:
 
 1) `Pipeline` (Board)
 - Group by: `Status`
-- Visible groups (recommended order): `Discovered`, `Audited`, `Draft Ready`, `Approved`, `Drafted`, `Sent`, `Replied`, `Suppressed`
+- Visible groups (recommended order): `Discovered`, `Audited`, `Draft Ready`, `Approved to Send`, `Drafted`, `Sent`, `Replied`, `Suppressed`
 - Card preview fields: `Category`, `Website`, `Email`, `Gmail Draft Link`, `Opt-out`
 - Sort: `Status` (manual board order), then `Name` ascending
 
 2) `Needs Review` (Table)
-- Filter: `Status` is `Draft Ready` OR `Approved`
+- Filter: `Status` is `Draft Ready` OR `Approved to Send`
 - Filter: `Opt-out` is unchecked
 - Columns visible: `Name`, `Category`, `Findings`, `Proof`, `Email Draft`, `Gmail Draft Link`, `Status`
 - Sort: `Last edited time` descending (or `Last Contacted` descending if you add automations)
@@ -327,7 +327,7 @@ Create these views in the Notion `Leads` database after properties exist:
 - Columns visible: `Name`, `Email`, `Website`, `Status`, `Notes`
 
 4) `Ready To Send` (Table, optional if using Gmail drafts)
-- Filter: `Status` is `Approved`
+- Filter: `Status` is `Approved to Send`
 - Filter: `Opt-out` is unchecked
 - Columns visible: `Name`, `Email`, `Email Draft`, `Gmail Draft Link`, `Proof`
 
