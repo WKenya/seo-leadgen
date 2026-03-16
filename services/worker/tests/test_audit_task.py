@@ -124,6 +124,38 @@ class AuditTaskTests(unittest.TestCase):
         self.assertEqual(kwargs["lead_id"], "not-a-uuid")
         self.assertEqual(kwargs["task_name"], "audit_lead")
 
+    def test_audit_lead_retries_once_for_transient_error(self) -> None:
+        lead_id = uuid4()
+        lead = audit.Lead(
+            id=lead_id,
+            name="Acme HVAC",
+            category="HVAC",
+            source="test",
+            website_url="https://acme.example",
+            status="Discovered",
+        )
+        fake_session = _FakeSession(lead)
+        settings = SimpleNamespace(
+            crawl_max_pages=10,
+            crawl_delay_seconds=0.0,
+            crawl_respect_robots=True,
+            audit_lighthouse_url="http://audit:8081",
+            audit_max_broken_link_issues=10,
+        )
+
+        with (
+            patch.object(audit, "SessionLocal", return_value=fake_session),
+            patch.object(audit, "get_settings", return_value=settings),
+            patch.object(audit, "check_tls", side_effect=TimeoutError("temporary timeout")),
+            patch.object(audit.audit_lead, "retry", side_effect=RuntimeError("retry_requested")) as retry_mock,
+            patch.object(audit, "log_task_failure_for_lead", return_value=False) as log_failure_mock,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "retry_requested"):
+                audit.audit_lead(str(lead_id))
+
+        retry_mock.assert_called_once()
+        log_failure_mock.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

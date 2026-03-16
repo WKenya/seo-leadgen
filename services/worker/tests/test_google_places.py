@@ -3,6 +3,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import patch
+
+import httpx
 
 WORKER_ROOT = Path(__file__).resolve().parents[1]
 if str(WORKER_ROOT) not in sys.path:
@@ -69,6 +72,28 @@ class GooglePlacesTests(unittest.TestCase):
         self.assertEqual(client.called, ["nearby", "text"])
         self.assertEqual(len(leads), 1)
         self.assertEqual(leads[0].website_url, "https://acme.example")
+
+    def test_get_retries_retryable_http_status_errors(self) -> None:
+        class FakeClient(GooglePlacesClient):
+            def __init__(self) -> None:
+                super().__init__(api_key="x")
+                self.calls = 0
+
+            def _fetch_json(self, *, client, base_url, path, params):  # type: ignore[override]
+                del client, base_url, path, params
+                self.calls += 1
+                if self.calls < 3:
+                    request = httpx.Request("GET", "https://example.test")
+                    response = httpx.Response(503, request=request)
+                    raise httpx.HTTPStatusError("temporary", request=request, response=response)
+                return {"status": "OK", "results": []}
+
+        client = FakeClient()
+        with patch("app.discovery.google_places.time.sleep", return_value=None):
+            payload = client._get("textsearch/json", {"query": "hvac in cleveland"})
+
+        self.assertEqual(payload.get("status"), "OK")
+        self.assertEqual(client.calls, 3)
 
 
 if __name__ == "__main__":

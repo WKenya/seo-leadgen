@@ -207,6 +207,69 @@ class SummarizeTaskTests(unittest.TestCase):
         self.assertTrue(any(isinstance(item, summarize.EmailDraft) for item in fake_session.added))
         self.assertEqual(send_task_mock.call_count, 2)
 
+    def test_summarize_marks_needs_manual_review_when_openai_fails(self) -> None:
+        lead_id = uuid4()
+        audit_id = uuid4()
+        lead = summarize.Lead(
+            id=lead_id,
+            name="Acme HVAC",
+            category="HVAC",
+            source="test",
+            website_url="https://acme.example",
+            status="Audited",
+        )
+        audit_model = summarize.Audit(
+            id=audit_id,
+            lead_id=lead_id,
+            started_at=datetime.now(timezone.utc),
+            final_url="https://acme.example",
+        )
+        fake_session = _FakeSession(lead=lead, audit=audit_model, issues=[])
+        settings = SimpleNamespace(
+            openai_api_key="sk-test",
+            openai_model="gpt-5-mini",
+            openai_base_url="https://api.openai.com/v1",
+            sender_name="Website Fixer",
+            sender_email="ops@example.com",
+            physical_address="PO Box 123, Cleveland, OH 44101",
+            opt_out_instructions='Reply "unsubscribe"',
+        )
+        fallback_output = DraftOutput(
+            lead_profile="Fallback profile for manual review path validation.",
+            quick_wins=[
+                QuickWin(
+                    title="Fix one issue",
+                    why_it_matters="Improves trust and conversion.",
+                    how_to_fix="Apply a scoped change and verify.",
+                )
+            ],
+            email_subject="Quick fix for Acme HVAC",
+            email_body_text="Hi Acme HVAC,\n\nOne fast fix can improve your site.\n\nThanks.",
+            claims_used=[],
+        )
+
+        with (
+            patch.object(summarize, "SessionLocal", return_value=fake_session),
+            patch.object(summarize, "get_settings", return_value=settings),
+            patch.object(summarize, "_is_suppressed", return_value=False),
+            patch.object(summarize, "generate_draft_with_openai", side_effect=RuntimeError("rate limit")),
+            patch.object(summarize, "_build_fallback_draft", return_value=fallback_output),
+            patch.object(summarize, "log_task_failure_for_lead", return_value=False),
+            patch.object(summarize.celery_app, "send_task") as send_task_mock,
+        ):
+            result = summarize.summarize_and_draft(str(lead_id), str(audit_id))
+
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["needs_manual_review"])
+        self.assertEqual(result["llm_mode"], "fallback")
+        self.assertEqual(send_task_mock.call_count, 2)
+        self.assertTrue(
+            any(
+                isinstance(item, summarize.OutreachEvent) and item.type == "needs_manual_review"
+                for item in fake_session.added
+            )
+        )
+
     def test_summarize_invalid_lead_uuid_logs_failure(self) -> None:
         with (
             patch.object(summarize, "get_settings"),

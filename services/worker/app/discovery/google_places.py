@@ -8,6 +8,8 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import httpx
 
 TRACKING_QUERY_KEYS = {"gclid", "fbclid", "mc_cid", "mc_eid"}
+RETRYABLE_HTTP_STATUS_CODES = {408, 409, 425, 429, 500, 502, 503, 504}
+RETRYABLE_GOOGLE_API_STATUSES = {"UNKNOWN_ERROR", "OVER_QUERY_LIMIT"}
 
 
 @dataclass(slots=True)
@@ -71,29 +73,64 @@ class GooglePlacesClient:
         self.api_key = api_key
         self.timeout_seconds = timeout_seconds
 
+    def _fetch_json(self, *, client: httpx.Client, base_url: str, path: str, params: dict[str, Any]) -> dict[str, Any]:
+        response = client.get(f"{base_url}/{path}", params=params)
+        response.raise_for_status()
+        return response.json()
+
     def _get(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         merged = dict(params)
         merged["key"] = self.api_key
         with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.get(f"{self.base_url}/{path}", params=merged)
-            response.raise_for_status()
-            payload = response.json()
-        status = payload.get("status")
-        if status not in {"OK", "ZERO_RESULTS"}:
-            raise RuntimeError(f"google_places_error: {status} {payload.get('error_message', '')}".strip())
-        return payload
+            for attempt in range(3):
+                try:
+                    payload = self._fetch_json(client=client, base_url=self.base_url, path=path, params=merged)
+                except httpx.HTTPStatusError as exc:
+                    status_code = exc.response.status_code if exc.response is not None else None
+                    if attempt < 2 and status_code in RETRYABLE_HTTP_STATUS_CODES:
+                        time.sleep(1.0 + attempt)
+                        continue
+                    raise
+                except httpx.HTTPError:
+                    if attempt < 2:
+                        time.sleep(1.0 + attempt)
+                        continue
+                    raise
+                status = str(payload.get("status") or "")
+                if status in {"OK", "ZERO_RESULTS"}:
+                    return payload
+                if attempt < 2 and status in RETRYABLE_GOOGLE_API_STATUSES:
+                    time.sleep(1.0 + attempt)
+                    continue
+                raise RuntimeError(f"google_places_error: {status} {payload.get('error_message', '')}".strip())
+        raise RuntimeError("google_places_error: exhausted retries")
 
     def _get_geocode(self, path: str, params: dict[str, Any]) -> dict[str, Any]:
         merged = dict(params)
         merged["key"] = self.api_key
         with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.get(f"{self.geocode_base_url}/{path}", params=merged)
-            response.raise_for_status()
-            payload = response.json()
-        status = payload.get("status")
-        if status not in {"OK", "ZERO_RESULTS"}:
-            raise RuntimeError(f"google_geocode_error: {status} {payload.get('error_message', '')}".strip())
-        return payload
+            for attempt in range(3):
+                try:
+                    payload = self._fetch_json(client=client, base_url=self.geocode_base_url, path=path, params=merged)
+                except httpx.HTTPStatusError as exc:
+                    status_code = exc.response.status_code if exc.response is not None else None
+                    if attempt < 2 and status_code in RETRYABLE_HTTP_STATUS_CODES:
+                        time.sleep(1.0 + attempt)
+                        continue
+                    raise
+                except httpx.HTTPError:
+                    if attempt < 2:
+                        time.sleep(1.0 + attempt)
+                        continue
+                    raise
+                status = str(payload.get("status") or "")
+                if status in {"OK", "ZERO_RESULTS"}:
+                    return payload
+                if attempt < 2 and status in RETRYABLE_GOOGLE_API_STATUSES:
+                    time.sleep(1.0 + attempt)
+                    continue
+                raise RuntimeError(f"google_geocode_error: {status} {payload.get('error_message', '')}".strip())
+        raise RuntimeError("google_geocode_error: exhausted retries")
 
     def _wait_for_page_token(self) -> None:
         # Google Places pagination token often needs a short warm-up delay.

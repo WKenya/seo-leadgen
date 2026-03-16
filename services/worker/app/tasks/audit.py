@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy import delete
+from sqlalchemy.exc import OperationalError
 
 from app.audit.crawler import CrawlConfig, crawl_site
 from app.audit.extract import choose_preferred_email
@@ -18,8 +19,12 @@ from app.tasks.task_failures import log_task_failure_for_lead
 from app.worker import celery_app
 
 
-@celery_app.task(name="audit_lead")
-def audit_lead(lead_id: str) -> dict[str, object]:
+def _is_transient_error(exc: Exception) -> bool:
+    return isinstance(exc, (OperationalError, TimeoutError, ConnectionError, OSError))
+
+
+@celery_app.task(name="audit_lead", bind=True, max_retries=1)
+def audit_lead(self, lead_id: str) -> dict[str, object]:  # noqa: ANN001
     settings = get_settings()
     audit_id_value: str | None = None
 
@@ -242,6 +247,8 @@ def audit_lead(lead_id: str) -> dict[str, object]:
             "seo_signals": seo_signals,
         }
     except Exception as exc:  # noqa: BLE001
+        if _is_transient_error(exc) and getattr(self.request, "retries", 0) < 1:
+            raise self.retry(exc=exc, countdown=5, max_retries=1)
         log_task_failure_for_lead(
             lead_id=lead_id,
             task_name="audit_lead",

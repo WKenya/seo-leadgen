@@ -244,6 +244,7 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
             )
             llm_mode = "fallback"
             llm_error = None
+            needs_manual_review = False
             draft_output: DraftOutput
             if settings.openai_api_key and settings.openai_model:
                 try:
@@ -258,6 +259,7 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
                     llm_mode = "openai"
                 except Exception as exc:  # noqa: BLE001
                     llm_error = str(exc)
+                    needs_manual_review = True
                     draft_output = _build_fallback_draft(lead, audit, issues, settings)
             else:
                 draft_output = _build_fallback_draft(lead, audit, issues, settings)
@@ -280,10 +282,19 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
                         "audit_id": str(audit.id),
                         "llm_mode": llm_mode,
                         "llm_error": llm_error,
+                        "needs_manual_review": needs_manual_review,
                         "claims_used_count": len(draft_output.claims_used),
                     },
                 )
             )
+            if needs_manual_review:
+                session.add(
+                    OutreachEvent(
+                        lead_id=lead.id,
+                        type="needs_manual_review",
+                        payload={"audit_id": str(audit.id), "reason": "llm_error", "llm_error": llm_error},
+                    )
+                )
             session.commit()
             session.refresh(draft)
             draft_id = str(draft.id)
@@ -308,6 +319,7 @@ def summarize_and_draft(lead_id: str, audit_id: str) -> dict[str, object]:
             "claims_used_count": len(draft_output.claims_used),
             "llm_mode": llm_mode,
             "llm_error": llm_error,
+            "needs_manual_review": needs_manual_review,
         }
     except Exception as exc:  # noqa: BLE001
         log_task_failure_for_lead(
