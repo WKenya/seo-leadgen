@@ -357,6 +357,21 @@ class AdminRouteTests(unittest.TestCase):
         refreshed = self.db.get(Lead, lead.id)
         self.assertEqual(refreshed.status, "Discovered")
 
+    def test_unsuppress_removes_duplicate_rows_for_same_normalized_value(self) -> None:
+        from app.models import Suppression
+
+        lead, _, _ = self._create_lead_with_draft()
+        self.db.add(Suppression(email_or_domain="  owner@acme.example  ", reason="opt_out"))
+        self.db.add(Suppression(email_or_domain="owner@acme.example", reason="manual"))
+        self.db.commit()
+
+        response = self.client.post(f"/admin/unsuppress/{lead.id}", json={})
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "unsuppressed")
+
+        rows = self.db.execute(select(Suppression)).scalars().all()
+        self.assertEqual(len(rows), 0)
+
     def test_mark_optout_avoids_duplicate_with_legacy_whitespace_suppression(self) -> None:
         from app.models import Suppression
 

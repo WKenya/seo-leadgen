@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -355,13 +355,10 @@ def unsuppress_lead(
     if not value:
         return {"lead_id": str(lead_id), "status": "missing_suppression_target"}
 
-    suppression = db.execute(
-        select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))) == value)
-    ).scalar_one_or_none()
-    if suppression is None:
+    normalized_suppression_value = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
+    deleted = db.execute(delete(Suppression).where(normalized_suppression_value == value)).rowcount or 0
+    if deleted == 0:
         return {"lead_id": str(lead_id), "status": "not_suppressed"}
-
-    db.delete(suppression)
     if (lead.status or "").strip().lower() == "suppressed":
         lead.status = "Discovered"
     db.add(OutreachEvent(lead_id=lead.id, type="unsuppress", payload={"value": value}))
