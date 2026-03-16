@@ -23,12 +23,17 @@ def list_leads(
     status_filter = (status or "").strip() or None
     q_filter = (q or "").strip() or None
     base = select(Lead)
+    count_stmt = select(func.count()).select_from(Lead)
     if status_filter:
-        base = base.where(func.lower(func.trim(func.coalesce(Lead.status, ""))) == status_filter.lower())
+        status_match = func.lower(func.trim(func.coalesce(Lead.status, ""))) == status_filter.lower()
+        base = base.where(status_match)
+        count_stmt = count_stmt.where(status_match)
     if q_filter:
         like = f"%{q_filter}%"
-        base = base.where((Lead.name.ilike(like)) | (Lead.website_url.ilike(like)) | (Lead.website_domain.ilike(like)))
-    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+        query_match = (Lead.name.ilike(like)) | (Lead.website_url.ilike(like)) | (Lead.website_domain.ilike(like))
+        base = base.where(query_match)
+        count_stmt = count_stmt.where(query_match)
+    total = int(db.execute(count_stmt).scalar_one())
     order_column = Lead.created_at.asc() if sort == "asc" else Lead.created_at.desc()
     stmt = base.order_by(order_column).offset(offset).limit(limit)
     leads = db.execute(stmt).scalars().all()
@@ -68,7 +73,7 @@ def list_lead_audits(
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
     base = select(Audit).where(Audit.lead_id == lead_id)
-    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    total = int(db.execute(select(func.count()).select_from(Audit).where(Audit.lead_id == lead_id)).scalar_one())
     order_column = Audit.started_at.asc() if sort == "asc" else Audit.started_at.desc()
     audits = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
     items = [AuditRead.from_model(audit).model_dump() for audit in audits]
