@@ -121,7 +121,9 @@ def _find_existing_lead(
     normalized_place_id = (place_id or "").strip()
     if normalized_place_id:
         if place_id_lookup_cache is not None and normalized_place_id in place_id_lookup_cache:
-            return place_id_lookup_cache[normalized_place_id]
+            cached_lead = place_id_lookup_cache[normalized_place_id]
+            if cached_lead is not None:
+                return cached_lead
         lead = session.execute(
             select(Lead).where(func.trim(func.coalesce(Lead.place_id, "")) == normalized_place_id)
         ).scalar_one_or_none()
@@ -135,7 +137,14 @@ def _find_existing_lead(
         return None
 
     if website_domain_lookup_cache is not None and target_domain in website_domain_lookup_cache:
-        return website_domain_lookup_cache[target_domain]
+        cached_lead = website_domain_lookup_cache[target_domain]
+        if cached_lead is not None:
+            return cached_lead
+        if domain_fallback_lookup is not None:
+            fallback_lead = domain_fallback_lookup.get(target_domain)
+            website_domain_lookup_cache[target_domain] = fallback_lead
+            return fallback_lead
+        return None
 
     lead = session.execute(
         select(Lead).where(func.lower(func.trim(func.coalesce(Lead.website_domain, ""))) == target_domain)

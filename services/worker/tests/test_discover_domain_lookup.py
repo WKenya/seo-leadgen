@@ -252,6 +252,28 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.assertEqual(second.id, lead.id)
         self.assertEqual(execute_mock.call_count, call_count_after_first)
 
+    def test_find_existing_lead_cached_missing_place_id_still_checks_domain(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Domain Fallback After Place Miss",
+            source="google_places",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        place_id_lookup_cache: dict[str, Lead | None] = {"missing-place": None}
+        found = _find_existing_lead(
+            self.session,
+            place_id="missing-place",
+            website_url="https://acme.example",
+            place_id_lookup_cache=place_id_lookup_cache,
+        )
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, lead.id)
+
     def test_prefill_place_id_lookup_cache_includes_found_and_missing_ids(self) -> None:
         lead = Lead(
             id=uuid4(),
@@ -372,6 +394,30 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.assertEqual(first.id, lead.id)
         self.assertEqual(second.id, lead.id)
         self.assertEqual(execute_mock.call_count, call_count_after_first)
+
+    def test_find_existing_lead_cached_missing_domain_uses_fallback_lookup(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Fallback Domain Match",
+            source="google_places",
+            website_url="https://legacy.example/home",
+            website_domain=None,
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        domain_fallback_lookup = _build_domain_fallback_lookup(self.session)
+        website_domain_lookup_cache: dict[str, Lead | None] = {"legacy.example": None}
+        found = _find_existing_lead(
+            self.session,
+            place_id="",
+            website_url="https://legacy.example/contact",
+            domain_fallback_lookup=domain_fallback_lookup,
+            website_domain_lookup_cache=website_domain_lookup_cache,
+        )
+        self.assertIsNotNone(found)
+        self.assertEqual(found.id, lead.id)
 
     def test_suppression_values_normalizes_legacy_whitespace_and_case(self) -> None:
         self.session.add(Suppression(email_or_domain="  Acme.Example  ", reason="opt_out"))
