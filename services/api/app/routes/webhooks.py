@@ -229,6 +229,59 @@ def _find_lead_by_email_or_domain(
     return None
 
 
+def _prefill_lead_lookup_cache(
+    db: Session,
+    *,
+    normalized_values: set[str],
+    domain_fallback_lookup: dict[str, Lead] | None = None,
+) -> tuple[dict[str, Lead | None], dict[str, Lead] | None]:
+    if not normalized_values:
+        return {}, domain_fallback_lookup
+
+    email_expr = func.lower(func.trim(func.coalesce(Lead.email, "")))
+    domain_expr = func.lower(func.trim(func.coalesce(Lead.website_domain, "")))
+
+    ambiguous_email_values = set(
+        db.scalars(
+            select(email_expr).where(email_expr.in_(normalized_values)).group_by(email_expr).having(func.count() > 1)
+        ).all()
+    )
+    ambiguous_domain_values = set(
+        db.scalars(
+            select(domain_expr).where(domain_expr.in_(normalized_values)).group_by(domain_expr).having(func.count() > 1)
+        ).all()
+    )
+    prefill_candidates = normalized_values - ambiguous_email_values - ambiguous_domain_values
+    if not prefill_candidates:
+        return {}, domain_fallback_lookup
+
+    cache: dict[str, Lead | None] = {}
+    for lead, normalized in db.execute(
+        select(Lead, email_expr.label("normalized")).where(email_expr.in_(prefill_candidates))
+    ).all():
+        normalized_value = str(normalized or "")
+        if normalized_value and normalized_value not in cache:
+            cache[normalized_value] = lead
+
+    unresolved = prefill_candidates - set(cache)
+    if unresolved:
+        for lead, normalized in db.execute(
+            select(Lead, domain_expr.label("normalized")).where(domain_expr.in_(unresolved))
+        ).all():
+            normalized_value = str(normalized or "")
+            if normalized_value and normalized_value not in cache:
+                cache[normalized_value] = lead
+
+    unresolved = prefill_candidates - set(cache)
+    if unresolved:
+        if domain_fallback_lookup is None:
+            domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
+        for normalized in unresolved:
+            cache[normalized] = domain_fallback_lookup.get(normalized)
+
+    return cache, domain_fallback_lookup
+
+
 def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
     normalized_value = _normalize_email_or_domain(value)
     if not normalized_value:
@@ -498,7 +551,18 @@ async def ingest_outreach_events(
         if candidate_lead_ids
         else {}
     )
-    lead_lookup_cache: dict[str, Lead | None] = {}
+    candidate_email_or_domain_values = {
+        normalized
+        for item in body.events
+        if item.event_type.strip().lower() in allowed
+        for normalized in [_normalize_email_or_domain(item.email_or_domain)]
+        if normalized
+    }
+    lead_lookup_cache, domain_fallback_lookup = _prefill_lead_lookup_cache(
+        db,
+        normalized_values=candidate_email_or_domain_values,
+        domain_fallback_lookup=domain_fallback_lookup,
+    )
     seen_suppression_values: set[str] = set()
     external_id_expr = func.trim(func.coalesce(OutreachEvent.external_id, ""))
     candidate_external_ids = {

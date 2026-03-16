@@ -254,7 +254,7 @@ class WebhookRouteTests(unittest.TestCase):
             category="HVAC",
             source="google_places",
             website_url="https://acme.example",
-            website_domain="acme.example",
+            website_domain=None,
             status="Discovered",
         )
         self.db.add(lead)
@@ -272,7 +272,7 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.json()["processed"], 1)
         build_lookup_mock.assert_called_once()
 
-    def test_webhook_token_mode_caches_repeated_email_or_domain_lookup(self) -> None:
+    def test_webhook_token_mode_prefetches_email_or_domain_lookups(self) -> None:
         from app.models import Lead
         from app.routes import webhooks as webhook_routes
 
@@ -305,7 +305,7 @@ class WebhookRouteTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["processed"], 2)
-        find_mock.assert_called_once()
+        find_mock.assert_not_called()
 
     def test_webhook_token_mode_resolves_lead_when_email_or_domain_is_url(self) -> None:
         from app.models import Lead
