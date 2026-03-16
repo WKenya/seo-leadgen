@@ -33,4 +33,4 @@ if settings.discovery_categories:
     }
 
 # Import task modules so Celery discovers decorated tasks.
-from app.tasks import audit, discover, gmail_drafts, notion_sync, summarize  # noqa: E402,F401
+from app.tasks import audit, discover, gmail_drafts, notion_sync, summarize, suppression  # noqa: E402,F401
