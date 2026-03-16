@@ -6,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -210,6 +211,47 @@ class WebhookRouteTests(unittest.TestCase):
         body = response.json()
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["rejected_by_reason"], {})
+
+    def test_webhook_token_mode_skips_domain_lookup_build_when_lead_id_present(self) -> None:
+        lead = self._create_lead()
+
+        with patch("app.routes.webhooks._build_lead_domain_fallback_lookup") as build_lookup_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json={"events": [{"lead_id": str(lead.id), "event_type": "replied", "event_id": "evt-direct-lookup-1"}]},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        build_lookup_mock.assert_not_called()
+
+    def test_webhook_token_mode_builds_domain_lookup_on_email_or_domain_fallback(self) -> None:
+        from app.models import Lead
+
+        lead = Lead(
+            id=uuid4(),
+            name="Domain Match Lazy Lookup",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        with patch("app.routes.webhooks._build_lead_domain_fallback_lookup") as build_lookup_mock:
+            build_lookup_mock.return_value = {"acme.example": lead}
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json={"events": [{"email_or_domain": "acme.example", "event_type": "replied", "event_id": "evt-lazy-lookup-1"}]},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        build_lookup_mock.assert_called_once()
 
     def test_webhook_token_mode_resolves_lead_when_email_or_domain_is_url(self) -> None:
         from app.models import Lead

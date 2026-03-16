@@ -483,7 +483,7 @@ async def ingest_outreach_events(
     processed_by_type: dict[str, int] = {}
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
-    domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
+    domain_fallback_lookup: dict[str, Lead] | None = None
 
     for item in body.events:
         event_type = item.event_type.strip().lower()
@@ -503,6 +503,8 @@ async def ingest_outreach_events(
 
         lead = db.get(Lead, item.lead_id) if item.lead_id else None
         if lead is None and item.email_or_domain:
+            if domain_fallback_lookup is None:
+                domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
             lead = _find_lead_by_email_or_domain(
                 db,
                 item.email_or_domain,
@@ -521,7 +523,7 @@ async def ingest_outreach_events(
             continue
 
         lead_domain = _domain_from_url(lead.website_domain) or _domain_from_url(lead.website_url)
-        if lead_domain:
+        if lead_domain and domain_fallback_lookup is not None:
             domain_fallback_lookup.setdefault(lead_domain, lead)
 
         provider_value = (item.provider or "").strip().lower() or None
