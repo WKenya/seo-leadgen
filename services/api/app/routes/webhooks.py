@@ -563,7 +563,11 @@ async def ingest_outreach_events(
         for item in body.events
     ]
     domain_fallback_lookup: dict[str, Lead] | None = None
-    candidate_lead_ids = {item.lead_id for item, _event_type, _external_id, _normalized_lookup in prepared_events if item.lead_id is not None}
+    candidate_lead_ids = {
+        item.lead_id
+        for item, event_type, _external_id, _normalized_lookup in prepared_events
+        if item.lead_id is not None and event_type in allowed
+    }
     lead_id_lookup_cache: dict[UUID, Lead | None] = (
         {
             **{lead_id: None for lead_id in candidate_lead_ids},
