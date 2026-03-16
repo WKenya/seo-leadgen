@@ -114,19 +114,35 @@ def _find_existing_lead(
 
 def _suppression_values(session) -> set[str]:
     normalized_value = func.trim(func.coalesce(Suppression.email_or_domain, ""))
+    lower_normalized_value = func.lower(normalized_value)
+    legacy_shape = (lower_normalized_value.like("%://%")) | (lower_normalized_value.like("%/%")) | (
+        lower_normalized_value.like("%:%")
+    )
     if not _has_legacy_suppression_rows(session):
         return set(
             session.execute(
-                select(func.lower(normalized_value)).where(
+                select(lower_normalized_value).where(
                     Suppression.email_or_domain.is_not(None),
                     normalized_value != "",
                 )
             ).scalars()
         )
 
-    values: set[str] = set()
+    values = set(
+        session.execute(
+            select(lower_normalized_value).where(
+                Suppression.email_or_domain.is_not(None),
+                normalized_value != "",
+                ~legacy_shape,
+            )
+        ).scalars()
+    )
     for raw_value in session.execute(
-        select(Suppression.email_or_domain).where(Suppression.email_or_domain.is_not(None), normalized_value != "")
+        select(Suppression.email_or_domain).where(
+            Suppression.email_or_domain.is_not(None),
+            normalized_value != "",
+            legacy_shape,
+        )
     ).scalars():
         normalized = _normalize_suppression_value(raw_value)
         if normalized:
