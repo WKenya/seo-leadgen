@@ -571,6 +571,17 @@ Status note (2026-02-27): checklist reflects current implementation. API route c
 
 ## 17) Critical questions (must answer or we assume defaults)
 
+Status note (2026-03-16): implementation now uses defaults for unresolved product decisions:
+- categories: `HVAC,dentist`
+- radius: `15000m` (~15 mi)
+- send method: Gmail drafts flow (with manual send)
+- artifact links: enabled when `PUBLIC_API_BASE_URL` is configured; artifacts endpoint supports optional basic auth
+- runtime target: local container stack (Docker/OrbStack or Podman)
+- model default: `OPENAI_MODEL=gpt-5-mini`
+- robots policy: respected (`CRAWL_RESPECT_ROBOTS=1`)
+- footer address: env-configured `PHYSICAL_ADDRESS` (default PO box)
+- opt-out mechanism: reply-only (`OPT_OUT_INSTRUCTIONS=Reply "unsubscribe"`)
+
 1) **Which 2 categories** first in Cleveland? (e.g., “HVAC” + “dentist”)  
 2) **Lead radius**: 5 mi / 10 mi / 15 mi / 25 mi? (default: 15 mi)  
 3) **Email sending method**:
@@ -587,3 +598,12 @@ Status note (2026-02-27): checklist reflects current implementation. API route c
    - reply + link to opt-out page (requires small web page)
 
 If you answer 1–4, Codex can implement with clean defaults for the rest.
+
+---
+
+## 18) Plan completion status
+
+Status note (2026-03-16): MVP implementation plan is complete for this repo revision.
+- milestones 1-6: complete
+- local gate: `make gate-local` passing
+- container gate: `make gate-container` passing (includes standup, migrations, smoke, smoke-e2e)
