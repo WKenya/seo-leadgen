@@ -579,6 +579,17 @@ async def ingest_outreach_events(
         if candidate_lead_ids
         else {}
     )
+    lead_default_suppression_values: dict[UUID, str | None] = {}
+    lead_domain_values: dict[UUID, str | None] = {}
+    for lead in lead_id_lookup_cache.values():
+        if lead is None:
+            continue
+        lead_default_suppression_values[lead.id] = _first_normalized_email_or_domain(
+            lead.email,
+            lead.website_domain,
+            _domain_from_url(lead.website_url),
+        )
+        lead_domain_values[lead.id] = _domain_from_url(lead.website_domain) or _domain_from_url(lead.website_url)
     candidate_email_or_domain_values = {
         normalized
         for item, event_type, _external_id, normalized in prepared_events
@@ -601,14 +612,7 @@ async def ingest_outreach_events(
             continue
         if item.lead_id is None:
             continue
-        lead = lead_id_lookup_cache.get(item.lead_id)
-        if lead is None:
-            continue
-        suppression_value = _first_normalized_email_or_domain(
-            lead.email,
-            lead.website_domain,
-            _domain_from_url(lead.website_url),
-        )
+        suppression_value = lead_default_suppression_values.get(item.lead_id)
         if suppression_value:
             candidate_suppression_values.add(suppression_value)
     seen_suppression_values = (
@@ -668,19 +672,25 @@ async def ingest_outreach_events(
             rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
 
-        lead_domain = _domain_from_url(lead.website_domain) or _domain_from_url(lead.website_url)
+        lead_domain = lead_domain_values.get(lead.id)
+        if lead_domain is None and lead.id not in lead_domain_values:
+            lead_domain = _domain_from_url(lead.website_domain) or _domain_from_url(lead.website_url)
+            lead_domain_values[lead.id] = lead_domain
         if lead_domain and domain_fallback_lookup is not None:
             domain_fallback_lookup.setdefault(lead_domain, lead)
 
         provider_value = (item.provider or "").strip().lower() or None
         provider_event_name = _normalize_optional_text(item.provider_event_name)
         provider_event_at = _normalize_optional_text(item.provider_event_at)
-        suppression_value = _first_normalized_email_or_domain(
-            normalized_lookup,
-            lead.email,
-            lead.website_domain,
-            _domain_from_url(lead.website_url),
-        )
+        lead_suppression_value = lead_default_suppression_values.get(lead.id)
+        if lead_suppression_value is None and lead.id not in lead_default_suppression_values:
+            lead_suppression_value = _first_normalized_email_or_domain(
+                lead.email,
+                lead.website_domain,
+                _domain_from_url(lead.website_url),
+            )
+            lead_default_suppression_values[lead.id] = lead_suppression_value
+        suppression_value = normalized_lookup or lead_suppression_value
         if event_type in suppression_event_types and suppression_value:
             if suppression_value not in seen_suppression_values:
                 _upsert_suppression(
