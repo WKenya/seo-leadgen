@@ -83,6 +83,32 @@ def _prefill_place_id_lookup_cache(session, *, place_ids: set[str]) -> dict[str,
     return cache
 
 
+def _prefill_website_domain_lookup_cache(session, *, website_domains: set[str]) -> dict[str, Lead | None]:
+    normalized_domains = {value.strip().lower() for value in website_domains if value and value.strip()}
+    if not normalized_domains:
+        return {}
+
+    normalized_website_domain = func.lower(func.trim(func.coalesce(Lead.website_domain, "")))
+    duplicate_domains = set(
+        session.execute(
+            select(normalized_website_domain)
+            .where(normalized_website_domain.in_(normalized_domains))
+            .group_by(normalized_website_domain)
+            .having(func.count() > 1)
+        ).scalars()
+    )
+    unique_domains = normalized_domains - duplicate_domains
+    cache: dict[str, Lead | None] = {domain: None for domain in unique_domains}
+    if not unique_domains:
+        return cache
+
+    for lead in session.execute(select(Lead).where(normalized_website_domain.in_(unique_domains))).scalars():
+        normalized = ((lead.website_domain or "").strip().lower()) or None
+        if normalized and normalized in cache and cache[normalized] is None:
+            cache[normalized] = lead
+    return cache
+
+
 def _find_existing_lead(
     session,
     *,
@@ -203,7 +229,10 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
             session,
             place_ids={(item.place_id or "").strip() for item in discovered if (item.place_id or "").strip()},
         )
-        website_domain_lookup_cache: dict[str, Lead | None] = {}
+        website_domain_lookup_cache = _prefill_website_domain_lookup_cache(
+            session,
+            website_domains={_domain(item.website_url) or "" for item in discovered},
+        )
         for item in discovered:
             lead_domain = _domain(item.website_url) or ""
             is_suppressed = lead_domain in suppression_values
