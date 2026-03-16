@@ -486,7 +486,18 @@ async def ingest_outreach_events(
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
     domain_fallback_lookup: dict[str, Lead] | None = None
-    lead_id_lookup_cache: dict[UUID, Lead | None] = {}
+    candidate_lead_ids = {item.lead_id for item in body.events if item.lead_id is not None}
+    lead_id_lookup_cache: dict[UUID, Lead | None] = (
+        {
+            **{lead_id: None for lead_id in candidate_lead_ids},
+            **{
+                lead.id: lead
+                for lead in db.execute(select(Lead).where(Lead.id.in_(candidate_lead_ids))).scalars()
+            },
+        }
+        if candidate_lead_ids
+        else {}
+    )
     lead_lookup_cache: dict[str, Lead | None] = {}
     seen_suppression_values: set[str] = set()
     external_id_expr = func.trim(func.coalesce(OutreachEvent.external_id, ""))
@@ -517,9 +528,7 @@ async def ingest_outreach_events(
 
         lead = None
         if item.lead_id:
-            if item.lead_id not in lead_id_lookup_cache:
-                lead_id_lookup_cache[item.lead_id] = db.get(Lead, item.lead_id)
-            lead = lead_id_lookup_cache[item.lead_id]
+            lead = lead_id_lookup_cache.get(item.lead_id)
         if lead is None and item.email_or_domain:
             normalized_lookup = _normalize_email_or_domain(item.email_or_domain)
             if normalized_lookup:
