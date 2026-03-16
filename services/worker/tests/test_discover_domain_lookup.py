@@ -13,6 +13,7 @@ from app.tasks.discover import (
     _build_domain_fallback_lookup,
     _find_existing_lead,
     _has_legacy_suppression_rows,
+    _prefill_place_id_lookup_cache,
     _suppression_values,
 )
 
@@ -249,6 +250,51 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         self.assertEqual(first.id, lead.id)
         self.assertEqual(second.id, lead.id)
         self.assertEqual(execute_mock.call_count, call_count_after_first)
+
+    def test_prefill_place_id_lookup_cache_includes_found_and_missing_ids(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Prefill Place Match",
+            source="google_places",
+            place_id="  place-123  ",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        cache = _prefill_place_id_lookup_cache(self.session, place_ids={"place-123", "missing-place"})
+        self.assertIn("place-123", cache)
+        self.assertIn("missing-place", cache)
+        self.assertIsNotNone(cache["place-123"])
+        self.assertEqual(cache["place-123"].id, lead.id)
+        self.assertIsNone(cache["missing-place"])
+
+    def test_prefill_place_id_lookup_cache_skips_ambiguous_duplicate_ids(self) -> None:
+        first = Lead(
+            id=uuid4(),
+            name="Dup Place A",
+            source="google_places",
+            place_id="dup-place",
+            website_url="https://a.example",
+            website_domain="a.example",
+            status="Discovered",
+        )
+        second = Lead(
+            id=uuid4(),
+            name="Dup Place B",
+            source="google_places",
+            place_id="  dup-place  ",
+            website_url="https://b.example",
+            website_domain="b.example",
+            status="Discovered",
+        )
+        self.session.add_all([first, second])
+        self.session.commit()
+
+        cache = _prefill_place_id_lookup_cache(self.session, place_ids={"dup-place"})
+        self.assertNotIn("dup-place", cache)
 
     def test_find_existing_lead_caches_domain_lookups(self) -> None:
         lead = Lead(
