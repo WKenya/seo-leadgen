@@ -539,6 +539,7 @@ async def ingest_outreach_events(
     processed_by_type: dict[str, int] = {}
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
+    suppression_event_types = {"bounced", "opt_out"}
     domain_fallback_lookup: dict[str, Lead] | None = None
     candidate_lead_ids = {item.lead_id for item in body.events if item.lead_id is not None}
     lead_id_lookup_cache: dict[UUID, Lead | None] = (
@@ -564,7 +565,23 @@ async def ingest_outreach_events(
         normalized_values=candidate_email_or_domain_values,
         domain_fallback_lookup=domain_fallback_lookup,
     )
-    seen_suppression_values: set[str] = set()
+    suppression_expr = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
+    candidate_suppression_values = {
+        normalized
+        for item in body.events
+        if item.event_type.strip().lower() in suppression_event_types
+        for normalized in [_normalize_email_or_domain(item.email_or_domain)]
+        if normalized
+    }
+    seen_suppression_values = (
+        set(
+            db.scalars(
+                select(suppression_expr).where(suppression_expr.in_(candidate_suppression_values))
+            ).all()
+        )
+        if candidate_suppression_values
+        else set()
+    )
     external_id_expr = func.trim(func.coalesce(OutreachEvent.external_id, ""))
     candidate_external_ids = {
         external_id
@@ -631,7 +648,7 @@ async def ingest_outreach_events(
             lead.website_domain,
             _domain_from_url(lead.website_url),
         )
-        if event_type in {"bounced", "opt_out"} and suppression_value:
+        if event_type in suppression_event_types and suppression_value:
             if suppression_value not in seen_suppression_values:
                 _upsert_suppression(db, value=suppression_value, reason=event_type)
                 seen_suppression_values.add(suppression_value)

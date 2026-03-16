@@ -786,18 +786,21 @@ class WebhookRouteTests(unittest.TestCase):
 
     def test_webhook_token_mode_avoids_duplicate_with_legacy_whitespace_suppression(self) -> None:
         from app.models import Suppression
+        from app.routes import webhooks as webhook_routes
 
         lead = self._create_lead(email="owner@acme.example")
         self.db.add(Suppression(email_or_domain="  owner@acme.example  ", reason="opt_out"))
         self.db.commit()
 
-        response = self.client.post(
-            "/webhooks/outreach-events",
-            headers={"X-Webhook-Token": "test_shared_secret"},
-            json=[{"email": "owner@acme.example", "event": "unsubscribe", "sg_event_id": "sg-existing-1"}],
-        )
+        with patch("app.routes.webhooks._upsert_suppression", wraps=webhook_routes._upsert_suppression) as upsert_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json=[{"email": "owner@acme.example", "event": "unsubscribe", "sg_event_id": "sg-existing-1"}],
+            )
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["processed"], 1)
+        upsert_mock.assert_not_called()
 
         rows = self.db.execute(select(Suppression)).scalars().all()
         self.assertEqual(len(rows), 1)
