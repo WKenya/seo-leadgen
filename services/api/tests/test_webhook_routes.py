@@ -245,6 +245,41 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.json()["processed"], 2)
         self.assertEqual(get_mock.call_count, 0)
 
+    def test_webhook_token_mode_skips_email_domain_prefill_for_valid_lead_ids(self) -> None:
+        from app.routes import webhooks as webhook_routes
+
+        lead = self._create_lead()
+
+        with patch(
+            "app.routes.webhooks._prefill_lead_lookup_cache",
+            wraps=webhook_routes._prefill_lead_lookup_cache,
+        ) as prefill_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json={
+                    "events": [
+                        {
+                            "lead_id": str(lead.id),
+                            "email_or_domain": "acme.example",
+                            "event_type": "replied",
+                            "event_id": "evt-lead-prefill-skip-1",
+                        },
+                        {
+                            "lead_id": str(lead.id),
+                            "email_or_domain": "acme.example",
+                            "event_type": "replied",
+                            "event_id": "evt-lead-prefill-skip-2",
+                        },
+                    ]
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 2)
+        self.assertEqual(prefill_mock.call_count, 1)
+        self.assertEqual(prefill_mock.call_args.kwargs["normalized_values"], set())
+
     def test_webhook_token_mode_builds_domain_lookup_on_email_or_domain_fallback(self) -> None:
         from app.models import Lead
 

@@ -581,9 +581,10 @@ async def ingest_outreach_events(
     )
     candidate_email_or_domain_values = {
         normalized
-        for _item, event_type, _external_id, normalized in prepared_events
+        for item, event_type, _external_id, normalized in prepared_events
         if event_type in allowed
         if normalized
+        if item.lead_id is None or lead_id_lookup_cache.get(item.lead_id) is None
     }
     lead_lookup_cache, domain_fallback_lookup = _prefill_lead_lookup_cache(
         db,
