@@ -377,7 +377,7 @@ Operational notes:
 
 ### Dedup rules
 - If multiple leads share same domain: keep one lead, attach aliases in notes.
-- Status note (2026-03-16): worker discovery prebuilds a normalized hostname lookup for legacy `website_url`/`website_domain` fallback matching and now caches repeated `place_id`/domain lead lookups per batch, avoiding repeated per-item fallback scans and exact-match queries.
+- Status note (2026-03-16): worker discovery prebuilds a normalized hostname lookup for legacy `website_url`/`website_domain` fallback matching, caches repeated `place_id`/domain lead lookups per batch, and splits suppression loading into SQL-fast canonical rows plus legacy-shape normalization, avoiding repeated per-item fallback scans/exact-match queries and reducing suppression normalization work.
 
 ---
 
