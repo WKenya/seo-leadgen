@@ -566,13 +566,27 @@ async def ingest_outreach_events(
         domain_fallback_lookup=domain_fallback_lookup,
     )
     suppression_expr = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
-    candidate_suppression_values = {
-        normalized
-        for item in body.events
-        if item.event_type.strip().lower() in suppression_event_types
-        for normalized in [_normalize_email_or_domain(item.email_or_domain)]
-        if normalized
-    }
+    candidate_suppression_values: set[str] = set()
+    for item in body.events:
+        event_type = item.event_type.strip().lower()
+        if event_type not in suppression_event_types:
+            continue
+        normalized = _normalize_email_or_domain(item.email_or_domain)
+        if normalized:
+            candidate_suppression_values.add(normalized)
+            continue
+        if item.lead_id is None:
+            continue
+        lead = lead_id_lookup_cache.get(item.lead_id)
+        if lead is None:
+            continue
+        suppression_value = _first_normalized_email_or_domain(
+            lead.email,
+            lead.website_domain,
+            _domain_from_url(lead.website_url),
+        )
+        if suppression_value:
+            candidate_suppression_values.add(suppression_value)
     seen_suppression_values = (
         set(
             db.scalars(

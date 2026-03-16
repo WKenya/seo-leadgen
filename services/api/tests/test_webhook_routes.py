@@ -805,6 +805,27 @@ class WebhookRouteTests(unittest.TestCase):
         rows = self.db.execute(select(Suppression)).scalars().all()
         self.assertEqual(len(rows), 1)
 
+    def test_webhook_token_mode_lead_id_opt_out_skips_existing_suppression_upsert(self) -> None:
+        from app.models import Suppression
+        from app.routes import webhooks as webhook_routes
+
+        lead = self._create_lead(email="owner@acme.example")
+        self.db.add(Suppression(email_or_domain="owner@acme.example", reason="opt_out"))
+        self.db.commit()
+
+        with patch("app.routes.webhooks._upsert_suppression", wraps=webhook_routes._upsert_suppression) as upsert_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json={"events": [{"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-existing-lead-optout-1"}]},
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 1)
+        upsert_mock.assert_not_called()
+
+        rows = self.db.execute(select(Suppression)).scalars().all()
+        self.assertEqual(len(rows), 1)
+
     def test_webhook_token_mode_dedupes_suppression_upsert_per_payload(self) -> None:
         from app.models import Suppression
         from app.routes import webhooks as webhook_routes
