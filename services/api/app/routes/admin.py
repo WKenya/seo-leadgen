@@ -96,16 +96,11 @@ def _has_legacy_suppression_rows(db: Session) -> bool:
 
 
 def _is_suppressed(db: Session, lead: Lead) -> bool:
-    keys: list[str] = []
-    if lead.email:
-        normalized_email = _normalize_suppression_value(lead.email)
-        if normalized_email:
-            keys.append(normalized_email)
+    normalized_email = _normalize_suppression_value(lead.email) if lead.email else None
     domain = _normalize_suppression_value(_domain_from_url(lead.website_domain) if lead.website_domain else None) or (
         _normalize_suppression_value(_domain_from_url(lead.website_url)) if lead.website_url else None
     )
-    if domain:
-        keys.append(domain)
+    keys = [key for key in {normalized_email, domain} if key]
     if not keys:
         return False
     if (
@@ -117,6 +112,9 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
         is not None
     ):
         return True
+    legacy_fallback_keys = [key for key in keys if "@" not in key]
+    if not legacy_fallback_keys:
+        return False
     if not _has_legacy_suppression_rows(db):
         return False
     normalized = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
@@ -126,7 +124,7 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
             (normalized.like("%://%")) | (normalized.like("%/%")) | (normalized.like("%:%")),
         )
     ).scalars():
-        if _normalize_suppression_value(raw_value) in keys:
+        if _normalize_suppression_value(raw_value) in legacy_fallback_keys:
             return True
     return False
 

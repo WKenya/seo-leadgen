@@ -160,6 +160,19 @@ class AdminRouteTests(unittest.TestCase):
         refreshed_lead = self.db.get(Lead, lead.id)
         self.assertEqual(refreshed_lead.status, "Suppressed")
 
+    def test_approve_draft_email_only_path_skips_legacy_suppression_scan(self) -> None:
+        lead, _, draft = self._create_lead_with_draft()
+        lead.website_url = ""
+        lead.website_domain = None
+        self.db.commit()
+
+        with patch("app.routes.admin._has_legacy_suppression_rows") as legacy_probe_mock:
+            response = self.client.post(f"/admin/approve-draft/{draft.id}")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["status"], "approved")
+        legacy_probe_mock.assert_not_called()
+
     def test_approve_draft_blocked_when_suppressed_by_schemeless_website_url_domain(self) -> None:
         from app.models import Lead, Suppression
 
