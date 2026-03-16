@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -49,13 +49,15 @@ def _status_label(status: str) -> str:
     return _STATUS_LABELS.get(status, status)
 
 
-def _failure_event_filter():
-    event_type = _event_type_expr()
-    return or_(
-        event_type == "bounced",
-        event_type.like("%blocked%"),
-        event_type.like("%failed%"),
-        event_type.like("%skipped%"),
+def _is_failure_event_type(event_type: str) -> bool:
+    normalized = str(event_type or "").strip().lower()
+    if not normalized:
+        return False
+    return (
+        normalized == "bounced"
+        or "blocked" in normalized
+        or "failed" in normalized
+        or "skipped" in normalized
     )
 
 
@@ -98,41 +100,32 @@ def metrics_summary(
     provider_column = _provider_expr()
     event_type_column = _event_type_expr()
 
-    events_today = int(db.execute(select(func.count()).select_from(OutreachEvent).where(*today_filter)).scalar_one())
     events_today_by_type_rows = db.execute(
         select(event_type_column.label("event_type"), func.count()).where(*today_filter).group_by(event_type_column)
     ).all()
+    events_today = sum(int(count) for _event_type, count in events_today_by_type_rows)
     events_today_by_type = {
         str(event_type): int(count) for event_type, count in events_today_by_type_rows if str(event_type or "")
     }
-    failure_filter = _failure_event_filter()
-    failures_today_by_type_rows = db.execute(
-        select(event_type_column.label("event_type"), func.count())
-        .where(*today_filter, failure_filter)
-        .group_by(event_type_column)
-    ).all()
     failures_today_by_type = {
-        str(event_type): int(count) for event_type, count in failures_today_by_type_rows if str(event_type or "")
+        event_type: count
+        for event_type, count in events_today_by_type.items()
+        if _is_failure_event_type(event_type)
     }
     failures_today = sum(failures_today_by_type.values())
-
-    provider_rows = db.execute(
-        select(provider_column.label("provider"), func.count())
-        .where(*today_filter, provider_column != "")
-        .group_by(provider_column)
-    ).all()
-    webhook_events_by_provider_today = {str(provider): int(count) for provider, count in provider_rows}
 
     provider_type_rows = db.execute(
         select(provider_column.label("provider"), event_type_column.label("event_type"), func.count())
         .where(*today_filter, provider_column != "")
         .group_by(provider_column, event_type_column)
     ).all()
+    webhook_events_by_provider_today: dict[str, int] = {}
     webhook_event_types_by_provider_today: dict[str, dict[str, int]] = {}
     for provider_name, event_type, count in provider_type_rows:
+        provider_key = str(provider_name)
+        webhook_events_by_provider_today[provider_key] = webhook_events_by_provider_today.get(provider_key, 0) + int(count)
         if not str(event_type or ""):
             continue
-        provider_key = str(provider_name)
         provider_bucket = webhook_event_types_by_provider_today.setdefault(provider_key, {})
         provider_bucket[str(event_type)] = int(count)
 
@@ -157,28 +150,12 @@ def metrics_summary(
     webhook_failure_types_today_for_provider: dict[str, int] | None = None
     latest_event_types_for_provider: list[str] | None = None
     if provider_filter:
-        webhook_events_today_for_provider = int(
-            db.execute(
-                select(func.count())
-                .select_from(OutreachEvent)
-                .where(*today_filter, provider_column == provider_filter)
-            ).scalar_one()
-        )
-        provider_type_filtered_rows = db.execute(
-            select(event_type_column.label("event_type"), func.count())
-            .where(*today_filter, provider_column == provider_filter)
-            .group_by(event_type_column)
-        ).all()
-        webhook_event_types_today_for_provider = {
-            str(event_type): int(count) for event_type, count in provider_type_filtered_rows if str(event_type or "")
-        }
-        provider_failure_rows = db.execute(
-            select(event_type_column.label("event_type"), func.count())
-            .where(*today_filter, provider_column == provider_filter, failure_filter)
-            .group_by(event_type_column)
-        ).all()
+        webhook_events_today_for_provider = webhook_events_by_provider_today.get(provider_filter, 0)
+        webhook_event_types_today_for_provider = dict(webhook_event_types_by_provider_today.get(provider_filter, {}))
         webhook_failure_types_today_for_provider = {
-            str(event_type): int(count) for event_type, count in provider_failure_rows if str(event_type or "")
+            event_type: count
+            for event_type, count in webhook_event_types_today_for_provider.items()
+            if _is_failure_event_type(event_type)
         }
         webhook_failures_today_for_provider = sum(webhook_failure_types_today_for_provider.values())
         latest_event_types_for_provider = [
