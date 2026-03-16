@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 API_ROOT = Path(__file__).resolve().parents[1]
@@ -512,6 +512,34 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(body["processed"], 1)
         self.assertEqual(body["rejected_by_reason"], {})
 
+    def test_upsert_suppression_uses_prefilled_existing_values_without_query(self) -> None:
+        from app.models import Suppression
+        from app.routes.webhooks import _upsert_suppression
+
+        db = MagicMock()
+        existing_values: set[str] = set()
+
+        _upsert_suppression(
+            db,
+            value="owner@acme.example",
+            reason="opt_out",
+            existing_values=existing_values,
+        )
+        _upsert_suppression(
+            db,
+            value="owner@acme.example",
+            reason="opt_out",
+            existing_values=existing_values,
+        )
+
+        db.execute.assert_not_called()
+        db.add.assert_called_once()
+        row = db.add.call_args.args[0]
+        self.assertIsInstance(row, Suppression)
+        self.assertEqual(row.email_or_domain, "owner@acme.example")
+        self.assertEqual(row.reason, "opt_out")
+        self.assertIn("owner@acme.example", existing_values)
+
     def test_build_lead_domain_fallback_lookup_uses_hostname_for_legacy_rows(self) -> None:
         from app.models import Lead
         from app.routes.webhooks import _build_lead_domain_fallback_lookup
@@ -846,6 +874,8 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         self.assertEqual(response.json()["processed"], 2)
         upsert_mock.assert_called_once()
+        self.assertIn("existing_values", upsert_mock.call_args.kwargs)
+        self.assertIsInstance(upsert_mock.call_args.kwargs["existing_values"], set)
 
         rows = self.db.execute(select(Suppression)).scalars().all()
         self.assertEqual(len(rows), 1)

@@ -283,11 +283,23 @@ def _prefill_lead_lookup_cache(
     return cache, domain_fallback_lookup
 
 
-def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
+def _upsert_suppression(
+    db: Session,
+    *,
+    value: str,
+    reason: str,
+    existing_values: set[str] | None = None,
+) -> None:
     normalized_value = _normalize_email_or_domain(value)
     if not normalized_value:
         return
     normalized_reason = _normalize_suppression_reason(reason)
+    if existing_values is not None:
+        if normalized_value in existing_values:
+            return
+        db.add(Suppression(email_or_domain=normalized_value, reason=normalized_reason))
+        existing_values.add(normalized_value)
+        return
     row_id = db.execute(
         select(Suppression.id)
         .where(
@@ -664,8 +676,12 @@ async def ingest_outreach_events(
         )
         if event_type in suppression_event_types and suppression_value:
             if suppression_value not in seen_suppression_values:
-                _upsert_suppression(db, value=suppression_value, reason=event_type)
-                seen_suppression_values.add(suppression_value)
+                _upsert_suppression(
+                    db,
+                    value=suppression_value,
+                    reason=event_type,
+                    existing_values=seen_suppression_values,
+                )
             lead.status = "Suppressed"
         elif event_type == "replied":
             lead.status = "Replied"
