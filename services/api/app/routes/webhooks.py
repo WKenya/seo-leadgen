@@ -484,6 +484,7 @@ async def ingest_outreach_events(
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
     domain_fallback_lookup: dict[str, Lead] | None = None
+    lead_lookup_cache: dict[str, Lead | None] = {}
     external_id_expr = func.trim(func.coalesce(OutreachEvent.external_id, ""))
     candidate_external_ids = {
         external_id
@@ -512,13 +513,17 @@ async def ingest_outreach_events(
 
         lead = db.get(Lead, item.lead_id) if item.lead_id else None
         if lead is None and item.email_or_domain:
-            if domain_fallback_lookup is None:
-                domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
-            lead = _find_lead_by_email_or_domain(
-                db,
-                item.email_or_domain,
-                domain_fallback_lookup=domain_fallback_lookup,
-            )
+            normalized_lookup = _normalize_email_or_domain(item.email_or_domain)
+            if normalized_lookup:
+                if normalized_lookup not in lead_lookup_cache:
+                    if domain_fallback_lookup is None:
+                        domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
+                    lead_lookup_cache[normalized_lookup] = _find_lead_by_email_or_domain(
+                        db,
+                        normalized_lookup,
+                        domain_fallback_lookup=domain_fallback_lookup,
+                    )
+                lead = lead_lookup_cache[normalized_lookup]
         if lead is None:
             reason = "lead_not_found"
             rejected.append(

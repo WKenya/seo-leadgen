@@ -253,6 +253,41 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.json()["processed"], 1)
         build_lookup_mock.assert_called_once()
 
+    def test_webhook_token_mode_caches_repeated_email_or_domain_lookup(self) -> None:
+        from app.models import Lead
+        from app.routes import webhooks as webhook_routes
+
+        lead = Lead(
+            id=uuid4(),
+            name="Domain Cache Match",
+            category="HVAC",
+            source="google_places",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.db.add(lead)
+        self.db.commit()
+
+        with patch(
+            "app.routes.webhooks._find_lead_by_email_or_domain",
+            wraps=webhook_routes._find_lead_by_email_or_domain,
+        ) as find_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json={
+                    "events": [
+                        {"email_or_domain": "acme.example", "event_type": "replied", "event_id": "evt-cache-1"},
+                        {"email_or_domain": "acme.example", "event_type": "replied", "event_id": "evt-cache-2"},
+                    ]
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 2)
+        find_mock.assert_called_once()
+
     def test_webhook_token_mode_resolves_lead_when_email_or_domain_is_url(self) -> None:
         from app.models import Lead
 
