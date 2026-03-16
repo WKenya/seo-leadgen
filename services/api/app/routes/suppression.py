@@ -20,9 +20,12 @@ def list_suppression(
     q_filter = (q or "").strip() or None
     normalized_value = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
     base = select(Suppression).where(normalized_value != "")
+    count_stmt = select(func.count()).select_from(Suppression).where(normalized_value != "")
     if q_filter:
-        base = base.where(normalized_value.like(f"%{q_filter.lower()}%"))
-    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+        query_match = normalized_value.like(f"%{q_filter.lower()}%")
+        base = base.where(query_match)
+        count_stmt = count_stmt.where(query_match)
+    total = int(db.execute(count_stmt).scalar_one())
     order_column = Suppression.created_at.asc() if sort == "asc" else Suppression.created_at.desc()
     stmt = base.order_by(order_column).offset(offset).limit(limit)
     rows = db.execute(stmt).scalars().all()
