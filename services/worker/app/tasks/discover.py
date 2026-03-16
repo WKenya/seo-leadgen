@@ -63,12 +63,18 @@ def _find_existing_lead(
     place_id: str,
     website_url: str,
     domain_fallback_lookup: Mapping[str, Lead] | None = None,
+    place_id_lookup_cache: dict[str, Lead | None] | None = None,
+    website_domain_lookup_cache: dict[str, Lead | None] | None = None,
 ) -> Lead | None:
     normalized_place_id = (place_id or "").strip()
     if normalized_place_id:
+        if place_id_lookup_cache is not None and normalized_place_id in place_id_lookup_cache:
+            return place_id_lookup_cache[normalized_place_id]
         lead = session.execute(
             select(Lead).where(func.trim(func.coalesce(Lead.place_id, "")) == normalized_place_id)
         ).scalar_one_or_none()
+        if place_id_lookup_cache is not None:
+            place_id_lookup_cache[normalized_place_id] = lead
         if lead is not None:
             return lead
 
@@ -76,21 +82,33 @@ def _find_existing_lead(
     if not target_domain:
         return None
 
+    if website_domain_lookup_cache is not None and target_domain in website_domain_lookup_cache:
+        return website_domain_lookup_cache[target_domain]
+
     lead = session.execute(
         select(Lead).where(func.lower(func.trim(func.coalesce(Lead.website_domain, ""))) == target_domain)
     ).scalar_one_or_none()
     if lead is not None:
+        if website_domain_lookup_cache is not None:
+            website_domain_lookup_cache[target_domain] = lead
         return lead
 
     if domain_fallback_lookup is not None:
-        return domain_fallback_lookup.get(target_domain)
+        lead = domain_fallback_lookup.get(target_domain)
+        if website_domain_lookup_cache is not None:
+            website_domain_lookup_cache[target_domain] = lead
+        return lead
 
     for candidate in session.execute(
         select(Lead).where((Lead.website_domain.is_not(None)) | (Lead.website_url.is_not(None)))
     ).scalars():
         candidate_domain = _domain(candidate.website_domain) or _domain(candidate.website_url)
         if candidate_domain == target_domain:
+            if website_domain_lookup_cache is not None:
+                website_domain_lookup_cache[target_domain] = candidate
             return candidate
+    if website_domain_lookup_cache is not None:
+        website_domain_lookup_cache[target_domain] = None
     return None
 
 
@@ -139,6 +157,8 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
     with SessionLocal() as session:
         suppression_values = _suppression_values(session)
         domain_fallback_lookup = _build_domain_fallback_lookup(session)
+        place_id_lookup_cache: dict[str, Lead | None] = {}
+        website_domain_lookup_cache: dict[str, Lead | None] = {}
         for item in discovered:
             lead_domain = _domain(item.website_url) or ""
             is_suppressed = lead_domain in suppression_values
@@ -147,6 +167,8 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                 place_id=item.place_id,
                 website_url=item.website_url,
                 domain_fallback_lookup=domain_fallback_lookup,
+                place_id_lookup_cache=place_id_lookup_cache,
+                website_domain_lookup_cache=website_domain_lookup_cache,
             )
             if lead is None:
                 lead = Lead(
@@ -164,6 +186,10 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
                 session.flush()
                 if lead_domain:
                     domain_fallback_lookup.setdefault(lead_domain, lead)
+                    website_domain_lookup_cache[lead_domain] = lead
+                normalized_place_id = (item.place_id or "").strip()
+                if normalized_place_id:
+                    place_id_lookup_cache[normalized_place_id] = lead
                 created += 1
                 if is_suppressed:
                     suppressed += 1
@@ -191,6 +217,10 @@ def discover_leads(city: str, category: str, radius_meters: int = 15000, limit: 
             if changed:
                 if lead_domain:
                     domain_fallback_lookup.setdefault(lead_domain, lead)
+                    website_domain_lookup_cache[lead_domain] = lead
+                normalized_place_id = (item.place_id or "").strip()
+                if normalized_place_id:
+                    place_id_lookup_cache[normalized_place_id] = lead
                 updated += 1
                 notion_sync_lead_ids.append(str(lead.id))
             else:

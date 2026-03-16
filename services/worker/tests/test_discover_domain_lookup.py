@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 from uuid import uuid4
 
 from sqlalchemy import create_engine
@@ -213,6 +214,75 @@ class DiscoverDomainLookupTests(unittest.TestCase):
         )
         self.assertIsNotNone(found)
         self.assertEqual(found.id, lead.id)
+
+    def test_find_existing_lead_caches_place_id_lookups(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Place Cache Match",
+            source="google_places",
+            place_id="place-123",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        place_id_lookup_cache: dict[str, Lead | None] = {}
+        with patch.object(self.session, "execute", wraps=self.session.execute) as execute_mock:
+            first = _find_existing_lead(
+                self.session,
+                place_id="place-123",
+                website_url="https://acme.example",
+                place_id_lookup_cache=place_id_lookup_cache,
+            )
+            call_count_after_first = execute_mock.call_count
+            second = _find_existing_lead(
+                self.session,
+                place_id="place-123",
+                website_url="https://acme.example",
+                place_id_lookup_cache=place_id_lookup_cache,
+            )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first.id, lead.id)
+        self.assertEqual(second.id, lead.id)
+        self.assertEqual(execute_mock.call_count, call_count_after_first)
+
+    def test_find_existing_lead_caches_domain_lookups(self) -> None:
+        lead = Lead(
+            id=uuid4(),
+            name="Domain Cache Match",
+            source="google_places",
+            website_url="https://acme.example",
+            website_domain="acme.example",
+            status="Discovered",
+        )
+        self.session.add(lead)
+        self.session.commit()
+
+        website_domain_lookup_cache: dict[str, Lead | None] = {}
+        with patch.object(self.session, "execute", wraps=self.session.execute) as execute_mock:
+            first = _find_existing_lead(
+                self.session,
+                place_id="",
+                website_url="https://acme.example",
+                website_domain_lookup_cache=website_domain_lookup_cache,
+            )
+            call_count_after_first = execute_mock.call_count
+            second = _find_existing_lead(
+                self.session,
+                place_id="",
+                website_url="https://acme.example",
+                website_domain_lookup_cache=website_domain_lookup_cache,
+            )
+
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first.id, lead.id)
+        self.assertEqual(second.id, lead.id)
+        self.assertEqual(execute_mock.call_count, call_count_after_first)
 
     def test_suppression_values_normalizes_legacy_whitespace_and_case(self) -> None:
         self.session.add(Suppression(email_or_domain="  Acme.Example  ", reason="opt_out"))
