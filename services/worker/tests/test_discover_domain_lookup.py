@@ -8,7 +8,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models import Lead, Suppression
-from app.tasks.discover import _build_domain_fallback_lookup, _find_existing_lead, _suppression_values
+from app.tasks.discover import (
+    _build_domain_fallback_lookup,
+    _find_existing_lead,
+    _has_legacy_suppression_rows,
+    _suppression_values,
+)
 
 
 class DiscoverDomainLookupTests(unittest.TestCase):
@@ -236,6 +241,19 @@ class DiscoverDomainLookupTests(unittest.TestCase):
 
         values = _suppression_values(self.session)
         self.assertEqual(values, set())
+
+    def test_has_legacy_suppression_rows_false_for_canonical_values(self) -> None:
+        self.session.add(Suppression(email_or_domain="owner@acme.example", reason="opt_out"))
+        self.session.add(Suppression(email_or_domain="acme.example", reason="opt_out"))
+        self.session.commit()
+
+        self.assertFalse(_has_legacy_suppression_rows(self.session))
+
+    def test_has_legacy_suppression_rows_true_for_url_values(self) -> None:
+        self.session.add(Suppression(email_or_domain="https://acme.example/path", reason="opt_out"))
+        self.session.commit()
+
+        self.assertTrue(_has_legacy_suppression_rows(self.session))
 
 
 if __name__ == "__main__":

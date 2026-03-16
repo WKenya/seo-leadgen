@@ -36,6 +36,16 @@ def _normalize_suppression_value(value: str | None) -> str | None:
     return _domain(normalized) or normalized
 
 
+def _has_legacy_suppression_rows(session) -> bool:
+    normalized = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
+    row = session.execute(
+        select(Suppression.id)
+        .where((normalized.like("%://%")) | (normalized.like("%/%")) | (normalized.like("%:%")))
+        .limit(1)
+    ).scalar_one_or_none()
+    return row is not None
+
+
 def _build_domain_fallback_lookup(session) -> dict[str, Lead]:
     lookup: dict[str, Lead] = {}
     for lead in session.execute(
@@ -85,8 +95,18 @@ def _find_existing_lead(
 
 
 def _suppression_values(session) -> set[str]:
-    values: set[str] = set()
     normalized_value = func.trim(func.coalesce(Suppression.email_or_domain, ""))
+    if not _has_legacy_suppression_rows(session):
+        return set(
+            session.execute(
+                select(func.lower(normalized_value)).where(
+                    Suppression.email_or_domain.is_not(None),
+                    normalized_value != "",
+                )
+            ).scalars()
+        )
+
+    values: set[str] = set()
     for raw_value in session.execute(
         select(Suppression.email_or_domain).where(Suppression.email_or_domain.is_not(None), normalized_value != "")
     ).scalars():
