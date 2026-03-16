@@ -241,38 +241,39 @@ def _prefill_lead_lookup_cache(
     email_expr = func.lower(func.trim(func.coalesce(Lead.email, "")))
     domain_expr = func.lower(func.trim(func.coalesce(Lead.website_domain, "")))
 
-    ambiguous_email_values = set(
-        db.scalars(
-            select(email_expr).where(email_expr.in_(normalized_values)).group_by(email_expr).having(func.count() > 1)
-        ).all()
-    )
-    ambiguous_domain_values = set(
-        db.scalars(
-            select(domain_expr).where(domain_expr.in_(normalized_values)).group_by(domain_expr).having(func.count() > 1)
-        ).all()
-    )
-    prefill_candidates = normalized_values - ambiguous_email_values - ambiguous_domain_values
-    if not prefill_candidates:
-        return {}, domain_fallback_lookup
-
     cache: dict[str, Lead | None] = {}
+    ambiguous_email_values: set[str] = set()
     for lead, normalized in db.execute(
-        select(Lead, email_expr.label("normalized")).where(email_expr.in_(prefill_candidates))
+        select(Lead, email_expr.label("normalized")).where(email_expr.in_(normalized_values))
     ).all():
         normalized_value = str(normalized or "")
-        if normalized_value and normalized_value not in cache:
-            cache[normalized_value] = lead
+        if not normalized_value:
+            continue
+        if normalized_value in ambiguous_email_values:
+            continue
+        if normalized_value in cache:
+            ambiguous_email_values.add(normalized_value)
+            cache.pop(normalized_value, None)
+            continue
+        cache[normalized_value] = lead
 
-    unresolved = prefill_candidates - set(cache)
-    if unresolved:
-        for lead, normalized in db.execute(
-            select(Lead, domain_expr.label("normalized")).where(domain_expr.in_(unresolved))
-        ).all():
-            normalized_value = str(normalized or "")
-            if normalized_value and normalized_value not in cache:
-                cache[normalized_value] = lead
+    domain_prefill_candidates = normalized_values - set(cache) - ambiguous_email_values
+    ambiguous_domain_values: set[str] = set()
+    for lead, normalized in db.execute(
+        select(Lead, domain_expr.label("normalized")).where(domain_expr.in_(domain_prefill_candidates))
+    ).all():
+        normalized_value = str(normalized or "")
+        if not normalized_value:
+            continue
+        if normalized_value in ambiguous_domain_values:
+            continue
+        if normalized_value in cache:
+            ambiguous_domain_values.add(normalized_value)
+            cache.pop(normalized_value, None)
+            continue
+        cache[normalized_value] = lead
 
-    unresolved = prefill_candidates - set(cache)
+    unresolved = domain_prefill_candidates - set(cache) - ambiguous_domain_values
     if unresolved:
         if domain_fallback_lookup is None:
             domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)

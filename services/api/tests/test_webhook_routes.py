@@ -307,6 +307,45 @@ class WebhookRouteTests(unittest.TestCase):
         self.assertEqual(response.json()["processed"], 2)
         find_mock.assert_not_called()
 
+    def test_webhook_token_mode_ambiguous_domain_uses_per_item_lookup_path(self) -> None:
+        from app.models import Lead
+
+        self.db.add(
+            Lead(
+                id=uuid4(),
+                name="Duplicate Domain One",
+                category="HVAC",
+                source="google_places",
+                website_url="https://acme.example/one",
+                website_domain="acme.example",
+                status="Discovered",
+            )
+        )
+        self.db.add(
+            Lead(
+                id=uuid4(),
+                name="Duplicate Domain Two",
+                category="HVAC",
+                source="google_places",
+                website_url="https://acme.example/two",
+                website_domain="acme.example",
+                status="Discovered",
+            )
+        )
+        self.db.commit()
+
+        with patch("app.routes.webhooks._find_lead_by_email_or_domain", return_value=None) as find_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json={"events": [{"email_or_domain": "acme.example", "event_type": "replied", "event_id": "evt-ambig-1"}]},
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 0)
+        self.assertEqual(response.json()["rejected_by_reason"], {"lead_not_found": 1})
+        find_mock.assert_called_once()
+
     def test_webhook_token_mode_resolves_lead_when_email_or_domain_is_url(self) -> None:
         from app.models import Lead
 
