@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -85,6 +85,11 @@ def _normalize_suppression_reason(reason: str | None, *, default: str = "manual"
     return normalized or default
 
 
+def _sql_like_contains(expr, value: str):  # type: ignore[no-untyped-def]
+    escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return expr.like(f"%{escaped}%", escape="\\")
+
+
 def _has_legacy_suppression_rows(db: Session) -> bool:
     normalized = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
     row = db.execute(
@@ -118,10 +123,12 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
     if not _has_legacy_suppression_rows(db):
         return False
     normalized = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
+    domain_match_filter = or_(*(_sql_like_contains(normalized, key) for key in legacy_fallback_keys))
     for raw_value in db.execute(
         select(Suppression.email_or_domain).where(
             Suppression.email_or_domain.is_not(None),
             (normalized.like("%://%")) | (normalized.like("%/%")) | (normalized.like("%:%")),
+            domain_match_filter,
         )
     ).scalars():
         if _normalize_suppression_value(raw_value) in legacy_fallback_keys:
