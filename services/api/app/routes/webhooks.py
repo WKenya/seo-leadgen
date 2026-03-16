@@ -553,8 +553,17 @@ async def ingest_outreach_events(
     processed_by_provider: dict[str, int] = {}
     allowed = {"replied", "bounced", "opt_out"}
     suppression_event_types = {"bounced", "opt_out"}
+    prepared_events = [
+        (
+            item,
+            item.event_type.strip().lower(),
+            ((item.event_id or "").strip() or None),
+            _normalize_email_or_domain(item.email_or_domain),
+        )
+        for item in body.events
+    ]
     domain_fallback_lookup: dict[str, Lead] | None = None
-    candidate_lead_ids = {item.lead_id for item in body.events if item.lead_id is not None}
+    candidate_lead_ids = {item.lead_id for item, _event_type, _external_id, _normalized_lookup in prepared_events if item.lead_id is not None}
     lead_id_lookup_cache: dict[UUID, Lead | None] = (
         {
             **{lead_id: None for lead_id in candidate_lead_ids},
@@ -568,9 +577,8 @@ async def ingest_outreach_events(
     )
     candidate_email_or_domain_values = {
         normalized
-        for item in body.events
-        if item.event_type.strip().lower() in allowed
-        for normalized in [_normalize_email_or_domain(item.email_or_domain)]
+        for _item, event_type, _external_id, normalized in prepared_events
+        if event_type in allowed
         if normalized
     }
     lead_lookup_cache, domain_fallback_lookup = _prefill_lead_lookup_cache(
@@ -580,11 +588,9 @@ async def ingest_outreach_events(
     )
     suppression_expr = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
     candidate_suppression_values: set[str] = set()
-    for item in body.events:
-        event_type = item.event_type.strip().lower()
+    for item, event_type, _external_id, normalized in prepared_events:
         if event_type not in suppression_event_types:
             continue
-        normalized = _normalize_email_or_domain(item.email_or_domain)
         if normalized:
             candidate_suppression_values.add(normalized)
             continue
@@ -612,9 +618,8 @@ async def ingest_outreach_events(
     external_id_expr = func.trim(func.coalesce(OutreachEvent.external_id, ""))
     candidate_external_ids = {
         external_id
-        for item in body.events
-        if item.event_type.strip().lower() in allowed
-        for external_id in [((item.event_id or "").strip())]
+        for _item, event_type, external_id, _normalized_lookup in prepared_events
+        if event_type in allowed
         if external_id
     }
     seen_external_ids = (
@@ -623,14 +628,12 @@ async def ingest_outreach_events(
         else set()
     )
 
-    for item in body.events:
-        event_type = item.event_type.strip().lower()
+    for item, event_type, external_id, normalized_lookup in prepared_events:
         if event_type not in allowed:
             reason = "invalid_event_type"
             rejected.append({"reason": reason, "event_type": item.event_type})
             rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
             continue
-        external_id = (item.event_id or "").strip() or None
         if external_id and external_id in seen_external_ids:
             duplicates += 1
             continue
@@ -638,18 +641,16 @@ async def ingest_outreach_events(
         lead = None
         if item.lead_id:
             lead = lead_id_lookup_cache.get(item.lead_id)
-        if lead is None and item.email_or_domain:
-            normalized_lookup = _normalize_email_or_domain(item.email_or_domain)
-            if normalized_lookup:
-                if normalized_lookup not in lead_lookup_cache:
-                    if domain_fallback_lookup is None:
-                        domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
-                    lead_lookup_cache[normalized_lookup] = _find_lead_by_email_or_domain(
-                        db,
-                        normalized_lookup,
-                        domain_fallback_lookup=domain_fallback_lookup,
-                    )
-                lead = lead_lookup_cache[normalized_lookup]
+        if lead is None and normalized_lookup:
+            if normalized_lookup not in lead_lookup_cache:
+                if domain_fallback_lookup is None:
+                    domain_fallback_lookup = _build_lead_domain_fallback_lookup(db)
+                lead_lookup_cache[normalized_lookup] = _find_lead_by_email_or_domain(
+                    db,
+                    normalized_lookup,
+                    domain_fallback_lookup=domain_fallback_lookup,
+                )
+            lead = lead_lookup_cache[normalized_lookup]
         if lead is None:
             reason = "lead_not_found"
             rejected.append(
@@ -670,7 +671,7 @@ async def ingest_outreach_events(
         provider_event_name = _normalize_optional_text(item.provider_event_name)
         provider_event_at = _normalize_optional_text(item.provider_event_at)
         suppression_value = _first_normalized_email_or_domain(
-            item.email_or_domain,
+            normalized_lookup,
             lead.email,
             lead.website_domain,
             _domain_from_url(lead.website_url),
