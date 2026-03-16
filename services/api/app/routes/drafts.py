@@ -49,7 +49,11 @@ def list_events(
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
     base = _apply_event_filters(select(OutreachEvent), event_type=event_type, provider=provider)
-    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    total = int(
+        db.execute(
+            base.with_only_columns(func.count(OutreachEvent.id), maintain_column_froms=True).order_by(None)
+        ).scalar_one()
+    )
     order_column = OutreachEvent.created_at.asc() if sort == "asc" else OutreachEvent.created_at.desc()
     events = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
     items = [OutreachEventRead.from_model(event).model_dump() for event in events]
@@ -77,7 +81,11 @@ def list_drafts(
     base = select(EmailDraft)
     if lead_id is not None:
         base = base.where(EmailDraft.lead_id == lead_id)
-    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    total = int(
+        db.execute(
+            base.with_only_columns(func.count(EmailDraft.id), maintain_column_froms=True).order_by(None)
+        ).scalar_one()
+    )
     order_column = EmailDraft.created_at.asc() if sort == "asc" else EmailDraft.created_at.desc()
     drafts = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
@@ -114,7 +122,11 @@ def list_lead_drafts(
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
     base = select(EmailDraft).where(EmailDraft.lead_id == lead_id)
-    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    total = int(
+        db.execute(
+            base.with_only_columns(func.count(EmailDraft.id), maintain_column_froms=True).order_by(None)
+        ).scalar_one()
+    )
     order_column = EmailDraft.created_at.asc() if sort == "asc" else EmailDraft.created_at.desc()
     drafts = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
     items = [EmailDraftRead.from_model(draft).model_dump() for draft in drafts]
@@ -145,7 +157,11 @@ def list_lead_events(
     if lead is None:
         raise HTTPException(status_code=404, detail="lead not found")
     base = _apply_event_filters(select(OutreachEvent).where(OutreachEvent.lead_id == lead_id), event_type=event_type, provider=provider)
-    total = int(db.execute(select(func.count()).select_from(base.subquery())).scalar_one())
+    total = int(
+        db.execute(
+            base.with_only_columns(func.count(OutreachEvent.id), maintain_column_froms=True).order_by(None)
+        ).scalar_one()
+    )
     order_column = OutreachEvent.created_at.asc() if sort == "asc" else OutreachEvent.created_at.desc()
     events = db.execute(base.order_by(order_column).offset(offset).limit(limit)).scalars().all()
     items = [OutreachEventRead.from_model(event).model_dump() for event in events]
