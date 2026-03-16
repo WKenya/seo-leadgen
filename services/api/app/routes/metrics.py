@@ -100,13 +100,18 @@ def metrics_summary(
     provider_column = _provider_expr()
     event_type_column = _event_type_expr()
 
-    events_today_by_type_rows = db.execute(
-        select(event_type_column.label("event_type"), func.count()).where(*today_filter).group_by(event_type_column)
+    provider_type_rows = db.execute(
+        select(provider_column.label("provider"), event_type_column.label("event_type"), func.count())
+        .where(*today_filter)
+        .group_by(provider_column, event_type_column)
     ).all()
-    events_today = sum(int(count) for _event_type, count in events_today_by_type_rows)
-    events_today_by_type = {
-        str(event_type): int(count) for event_type, count in events_today_by_type_rows if str(event_type or "")
-    }
+    events_today = sum(int(count) for _provider_name, _event_type, count in provider_type_rows)
+    events_today_by_type: dict[str, int] = {}
+    for _provider_name, event_type, count in provider_type_rows:
+        event_type_key = str(event_type or "")
+        if not event_type_key:
+            continue
+        events_today_by_type[event_type_key] = events_today_by_type.get(event_type_key, 0) + int(count)
     failures_today_by_type = {
         event_type: count
         for event_type, count in events_today_by_type.items()
@@ -114,15 +119,12 @@ def metrics_summary(
     }
     failures_today = sum(failures_today_by_type.values())
 
-    provider_type_rows = db.execute(
-        select(provider_column.label("provider"), event_type_column.label("event_type"), func.count())
-        .where(*today_filter, provider_column != "")
-        .group_by(provider_column, event_type_column)
-    ).all()
     webhook_events_by_provider_today: dict[str, int] = {}
     webhook_event_types_by_provider_today: dict[str, dict[str, int]] = {}
     for provider_name, event_type, count in provider_type_rows:
         provider_key = str(provider_name)
+        if not provider_key:
+            continue
         webhook_events_by_provider_today[provider_key] = webhook_events_by_provider_today.get(provider_key, 0) + int(count)
         if not str(event_type or ""):
             continue
