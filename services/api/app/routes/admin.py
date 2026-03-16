@@ -110,7 +110,9 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
         return False
     if (
         db.execute(
-            select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(keys))
+            select(Suppression.id)
+            .where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(keys))
+            .limit(1)
         ).scalar_one_or_none()
         is not None
     ):
@@ -142,12 +144,14 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
     if not normalized_value:
         return
     normalized_reason = _normalize_suppression_reason(reason)
-    suppression = db.execute(
-        select(Suppression).where(
+    suppression_id = db.execute(
+        select(Suppression.id)
+        .where(
             func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))) == normalized_value
         )
+        .limit(1)
     ).scalar_one_or_none()
-    if suppression is None:
+    if suppression_id is None:
         db.add(Suppression(email_or_domain=normalized_value, reason=normalized_reason))
 
 

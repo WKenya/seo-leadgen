@@ -234,12 +234,14 @@ def _upsert_suppression(db: Session, *, value: str, reason: str) -> None:
     if not normalized_value:
         return
     normalized_reason = _normalize_suppression_reason(reason)
-    row = db.execute(
-        select(Suppression).where(
+    row_id = db.execute(
+        select(Suppression.id)
+        .where(
             func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))) == normalized_value
         )
+        .limit(1)
     ).scalar_one_or_none()
-    if row is None:
+    if row_id is None:
         db.add(Suppression(email_or_domain=normalized_value, reason=normalized_reason))
 
 

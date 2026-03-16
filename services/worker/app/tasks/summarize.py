@@ -61,7 +61,9 @@ def _is_suppressed(session, lead: Lead) -> bool:
     if not values:
         return False
     row = session.execute(
-        select(Suppression).where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(values))
+        select(Suppression.id)
+        .where(func.lower(func.trim(func.coalesce(Suppression.email_or_domain, ""))).in_(values))
+        .limit(1)
     ).scalar_one_or_none()
     if row is not None:
         return True
