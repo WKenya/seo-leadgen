@@ -485,6 +485,7 @@ async def ingest_outreach_events(
     allowed = {"replied", "bounced", "opt_out"}
     domain_fallback_lookup: dict[str, Lead] | None = None
     lead_lookup_cache: dict[str, Lead | None] = {}
+    seen_suppression_values: set[str] = set()
     external_id_expr = func.trim(func.coalesce(OutreachEvent.external_id, ""))
     candidate_external_ids = {
         external_id
@@ -550,7 +551,9 @@ async def ingest_outreach_events(
             _domain_from_url(lead.website_url),
         )
         if event_type in {"bounced", "opt_out"} and suppression_value:
-            _upsert_suppression(db, value=suppression_value, reason=event_type)
+            if suppression_value not in seen_suppression_values:
+                _upsert_suppression(db, value=suppression_value, reason=event_type)
+                seen_suppression_values.add(suppression_value)
             lead.status = "Suppressed"
         elif event_type == "replied":
             lead.status = "Replied"

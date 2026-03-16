@@ -744,6 +744,30 @@ class WebhookRouteTests(unittest.TestCase):
         rows = self.db.execute(select(Suppression)).scalars().all()
         self.assertEqual(len(rows), 1)
 
+    def test_webhook_token_mode_dedupes_suppression_upsert_per_payload(self) -> None:
+        from app.models import Suppression
+        from app.routes import webhooks as webhook_routes
+
+        lead = self._create_lead(email="owner@acme.example")
+        payload = {
+            "events": [
+                {"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-optout-1"},
+                {"lead_id": str(lead.id), "event_type": "opt_out", "event_id": "evt-optout-2"},
+            ]
+        }
+        with patch("app.routes.webhooks._upsert_suppression", wraps=webhook_routes._upsert_suppression) as upsert_mock:
+            response = self.client.post(
+                "/webhooks/outreach-events",
+                headers={"X-Webhook-Token": "test_shared_secret"},
+                json=payload,
+            )
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["processed"], 2)
+        upsert_mock.assert_called_once()
+
+        rows = self.db.execute(select(Suppression)).scalars().all()
+        self.assertEqual(len(rows), 1)
+
     def test_webhook_form_payload_with_invalid_utf8_returns_400(self) -> None:
         response = self.client.post(
             "/webhooks/outreach-events",
