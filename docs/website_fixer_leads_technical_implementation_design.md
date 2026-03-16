@@ -480,7 +480,7 @@ Fallback if Gmail API is too heavy:
 - If lead replies “unsubscribe”:
   - manually check “Opt-out” in Notion OR call an admin endpoint
   - system writes suppression row and prevents future drafts/sends
-- Status note (2026-03-16): suppression keys are canonicalized (`email` lowercase; URL/domain forms -> hostname), strict email-shape detection avoids URL-userinfo misclassification, runtime checks use a legacy-row probe and then only legacy-shaped fallback scans (URL/path/port patterns), suppression read responses normalize legacy URL rows, and migration `20260315_0006` backfills/dedupes legacy suppression rows by canonical key.
+- Status note (2026-03-16): suppression keys are canonicalized (`email` lowercase; URL/domain forms -> hostname), strict email-shape detection avoids URL-userinfo misclassification, runtime checks use a legacy-row probe and then only legacy-shaped fallback scans (URL/path/port patterns), suppression existence/upsert probes now use scalar-id `LIMIT 1` queries instead of full-row loads, suppression read responses normalize legacy URL rows, and migration `20260315_0006` backfills/dedupes legacy suppression rows by canonical key.
 
 ---
 
@@ -496,7 +496,7 @@ Public (or internal-only behind auth):
 - `POST /admin/mark-optout/{lead_id}`
 
 API is primarily for your internal use and Notion artifact links.
-Status note (2026-03-16): webhook ingest now lazily builds domain fallback lookup only when `email_or_domain` resolution is needed, caches repeated `lead_id` and normalized `email_or_domain` lead matches per payload, dedupes suppression upserts per payload, and batch-prefetches trimmed `external_id` values once per request to reduce per-event duplicate-id/lead-resolution/suppression queries while preserving duplicate/rejection semantics.
+Status note (2026-03-16): webhook ingest now lazily builds domain fallback lookup only when `email_or_domain` resolution is needed, caches repeated `lead_id` and normalized `email_or_domain` lead matches per payload, dedupes suppression upserts per payload, uses scalar-id `LIMIT 1` suppression existence probes, and batch-prefetches trimmed `external_id` values once per request to reduce per-event duplicate-id/lead-resolution/suppression queries while preserving duplicate/rejection semantics.
 
 ---
 
