@@ -85,6 +85,16 @@ def _normalize_suppression_reason(reason: str | None, *, default: str = "manual"
     return normalized or default
 
 
+def _has_legacy_suppression_rows(db: Session) -> bool:
+    normalized = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
+    row = db.execute(
+        select(Suppression.id)
+        .where((normalized.like("%://%")) | (normalized.like("%/%")) | (normalized.like("%:%")))
+        .limit(1)
+    ).scalar_one_or_none()
+    return row is not None
+
+
 def _is_suppressed(db: Session, lead: Lead) -> bool:
     keys: list[str] = []
     if lead.email:
@@ -105,6 +115,8 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
         is not None
     ):
         return True
+    if not _has_legacy_suppression_rows(db):
+        return False
     for row in db.execute(select(Suppression).where(Suppression.email_or_domain.is_not(None))).scalars():
         if _normalize_suppression_value(row.email_or_domain) in keys:
             return True

@@ -83,16 +83,25 @@ class _FakeScalarResult:
 
 
 class _CaseAwareSuppressionSession:
-    def __init__(self, stored_values: list[str]):
+    def __init__(self, stored_values: list[str], *, raise_on_fallback_scan: bool = False):
         self.stored_values = stored_values
+        self.raise_on_fallback_scan = raise_on_fallback_scan
 
     def execute(self, statement):  # noqa: ANN001
         where = list(statement._where_criteria)
         criterion = where[0]
-        criterion_text = str(criterion).lower()
+        criterion_text = " ".join(str(item).lower() for item in where)
         if "is not null" in criterion_text:
+            if self.raise_on_fallback_scan:
+                raise AssertionError("fallback scan should not run")
             rows = [SimpleNamespace(email_or_domain=value) for value in self.stored_values]
             return _FakeScalarResult(None, rows=rows)
+        if " like " in criterion_text:
+            for stored in self.stored_values:
+                probe = stored.strip().lower()
+                if "://" in probe or "/" in probe or ":" in probe:
+                    return _FakeScalarResult(object())
+            return _FakeScalarResult(None)
         is_lower_query = getattr(criterion.left, "name", "") == "lower" or "lower(" in criterion_text
         is_trim_query = "trim(" in criterion_text
         candidates = [str(value) for value in criterion.right.value]
@@ -293,6 +302,23 @@ class SummarizeTaskTests(unittest.TestCase):
         )
         session = _CaseAwareSuppressionSession(stored_values=["https://user@Acme.Example/path"])
         self.assertTrue(summarize._is_suppressed(session, lead))
+
+    def test_is_suppressed_skips_fallback_scan_when_no_legacy_rows(self) -> None:
+        lead = summarize.Lead(
+            id=uuid4(),
+            name="Acme HVAC",
+            category="HVAC",
+            source="test",
+            website_url="https://acme.example/home",
+            website_domain=None,
+            email=None,
+            status="Audited",
+        )
+        session = _CaseAwareSuppressionSession(
+            stored_values=["owner@acme.example"],
+            raise_on_fallback_scan=True,
+        )
+        self.assertFalse(summarize._is_suppressed(session, lead))
 
 
 if __name__ == "__main__":

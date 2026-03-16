@@ -39,6 +39,16 @@ def _normalize_suppression_value(value: str | None) -> str | None:
     return _lead_domain(normalized) or normalized
 
 
+def _has_legacy_suppression_rows(session) -> bool:
+    normalized = func.lower(func.trim(func.coalesce(Suppression.email_or_domain, "")))
+    row = session.execute(
+        select(Suppression.id)
+        .where((normalized.like("%://%")) | (normalized.like("%/%")) | (normalized.like("%:%")))
+        .limit(1)
+    ).scalar_one_or_none()
+    return row is not None
+
+
 def _is_suppressed(session, lead: Lead) -> bool:
     values = []
     if lead.email:
@@ -55,6 +65,8 @@ def _is_suppressed(session, lead: Lead) -> bool:
     ).scalar_one_or_none()
     if row is not None:
         return True
+    if not _has_legacy_suppression_rows(session):
+        return False
     for candidate in session.execute(select(Suppression).where(Suppression.email_or_domain.is_not(None))).scalars():
         if _normalize_suppression_value(candidate.email_or_domain) in values:
             return True
