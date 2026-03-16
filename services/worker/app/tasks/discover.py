@@ -86,8 +86,11 @@ def _find_existing_lead(
 
 def _suppression_values(session) -> set[str]:
     values: set[str] = set()
-    for row in session.execute(select(Suppression)).scalars():
-        normalized = _normalize_suppression_value(row.email_or_domain)
+    normalized_value = func.trim(func.coalesce(Suppression.email_or_domain, ""))
+    for raw_value in session.execute(
+        select(Suppression.email_or_domain).where(Suppression.email_or_domain.is_not(None), normalized_value != "")
+    ).scalars():
+        normalized = _normalize_suppression_value(raw_value)
         if normalized:
             values.add(normalized)
     return values

@@ -94,8 +94,7 @@ class _CaseAwareSuppressionSession:
         if "is not null" in criterion_text:
             if self.raise_on_fallback_scan:
                 raise AssertionError("fallback scan should not run")
-            rows = [SimpleNamespace(email_or_domain=value) for value in self.stored_values]
-            return _FakeScalarResult(None, rows=rows)
+            return _FakeScalarResult(None, rows=self.stored_values)
         if " like " in criterion_text:
             for stored in self.stored_values:
                 probe = stored.strip().lower()

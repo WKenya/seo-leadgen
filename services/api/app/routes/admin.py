@@ -117,8 +117,10 @@ def _is_suppressed(db: Session, lead: Lead) -> bool:
         return True
     if not _has_legacy_suppression_rows(db):
         return False
-    for row in db.execute(select(Suppression).where(Suppression.email_or_domain.is_not(None))).scalars():
-        if _normalize_suppression_value(row.email_or_domain) in keys:
+    for raw_value in db.execute(
+        select(Suppression.email_or_domain).where(Suppression.email_or_domain.is_not(None))
+    ).scalars():
+        if _normalize_suppression_value(raw_value) in keys:
             return True
     return False
 
