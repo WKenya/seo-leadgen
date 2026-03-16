@@ -131,6 +131,7 @@ def metrics_summary(
 
     latest_event_rows = db.execute(
         select(event_type_column.label("event_type"), provider_column.label("provider"))
+        .where(event_type_column != "")
         .order_by(OutreachEvent.created_at.desc())
         .limit(latest_limit)
     ).all()
@@ -162,7 +163,7 @@ def metrics_summary(
             event_type
             for event_type, in db.execute(
                 select(event_type_column.label("event_type"))
-                .where(provider_column == provider_filter)
+                .where(provider_column == provider_filter, event_type_column != "")
                 .order_by(OutreachEvent.created_at.desc())
                 .limit(latest_limit)
             ).all()
