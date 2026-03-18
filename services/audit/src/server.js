@@ -153,12 +153,7 @@ app.post("/run", async (req, res) => {
       ...(includeLhr ? { lhr } : {}),
     });
   } catch (err) {
-    return res.status(502).json({
-      ok: false,
-      mode: "lighthouse",
-      url,
-      error: String(err),
-    });
+    return res.json(stubRun(url, `runtime failure: ${String(err)}`));
   } finally {
     try {
       if (chrome) await chrome.kill();
@@ -172,4 +167,3 @@ const port = Number(process.env.PORT ?? 8081);
 app.listen(port, () => {
   console.log(`audit service listening on ${port}`);
 });
-

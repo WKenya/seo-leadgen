@@ -175,6 +175,7 @@ Notes:
 - `/leads` `q` filter matches `name`, `website_url`, and `website_domain` (supports legacy domain-only rows)
 - lead read payload `status` values normalize to canonical labels for known states (e.g. legacy `  sUpPrEsSeD  ` -> `Suppressed`)
 - `services/audit` runs real Lighthouse if deps+Chromium are available; set `LIGHTHOUSE_STUB=1` to force stub mode
+- when Chrome/Lighthouse runtime startup fails, `services/audit` now degrades to a stub `/run` response instead of failing the whole smoke gate
 - set `PUBLIC_API_BASE_URL` so Notion `Proof` field includes clickable artifact links (screenshots/reports)
 - screenshot capture uses Playwright in worker; if browser/runtime missing, audit stores a screenshot error instead of failing the whole audit
 - screenshot artifact paths normalize schemeless/whitespace URLs into stable host slugs (`example.com` instead of `unknown`)
